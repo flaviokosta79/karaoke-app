@@ -5,6 +5,7 @@ const cors = require('cors');
 const QRCode = require('qrcode');
 const { nanoid } = require('nanoid');
 const songsRouter = require('./routes/songs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +17,9 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ['Content-Type']
 }));
+
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Configure Socket.IO to accept connections from any origin
 const io = socketIo(server, {
@@ -171,9 +175,22 @@ io.on('connection', (socket) => {
         session.songQueue = [];
       }
 
+      // Adicionar a música à fila
       session.songQueue.push(song);
       console.log(`Updated song queue for session ${sessionId}:`, session.songQueue);
       io.to(sessionId).emit('songQueue', session.songQueue);
+
+      // Se não houver música tocando, começar a reprodução desta música
+      if (!session.currentSong) {
+        const nextSong = session.songQueue.shift();
+        session.currentSong = {
+          ...nextSong,
+          startTime: Date.now()
+        };
+        console.log(`Starting playback of first song:`, session.currentSong);
+        io.to(sessionId).emit('currentSong', session.currentSong);
+        io.to(sessionId).emit('songQueue', session.songQueue);
+      }
     } catch (error) {
       console.error('Error adding song to queue:', error);
       socket.emit('error', { message: 'Failed to add song to queue' });
@@ -230,6 +247,42 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('playNextSong', ({ sessionId }) => {
+    try {
+      console.log(`Playing next song in session ${sessionId}`);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        console.error(`Session ${sessionId} not found`);
+        socket.emit('error', { message: 'Session not found' });
+        return;
+      }
+
+      if (!session.songQueue || session.songQueue.length === 0) {
+        console.log('No more songs in queue');
+        session.currentSong = null;
+        io.to(sessionId).emit('currentSong', null);
+        return;
+      }
+
+      // Pegar a próxima música da fila
+      const nextSong = session.songQueue.shift();
+      session.currentSong = {
+        ...nextSong,
+        startTime: Date.now()
+      };
+      
+      console.log(`Playing next song:`, nextSong);
+      console.log(`Updated song queue:`, session.songQueue);
+      
+      // Notificar todos os clientes sobre a nova música atual e a fila atualizada
+      io.to(sessionId).emit('currentSong', session.currentSong);
+      io.to(sessionId).emit('songQueue', session.songQueue);
+    } catch (error) {
+      console.error('Error playing next song:', error);
+      socket.emit('error', { message: 'Failed to play next song' });
+    }
+  });
+
   socket.on('reorderQueue', ({ sessionId, sourceIndex, destinationIndex }) => {
     try {
       console.log(`Reordering queue in session ${sessionId} from ${sourceIndex} to ${destinationIndex}`);
@@ -278,10 +331,10 @@ io.on('connection', (socket) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 server.listen(PORT, '0.0.0.0', () => {
   const localIp = getLocalIpAddress();
   console.log(`Server running on port ${PORT}`);
-  console.log(`Local IP: ${localIp}`);
-  console.log(`Access the app at: http://${localIp}:3000`);
+  console.log('Local IP:', getLocalIpAddress());
+  console.log(`Access the app at: http://${getLocalIpAddress()}:3000`);
 });

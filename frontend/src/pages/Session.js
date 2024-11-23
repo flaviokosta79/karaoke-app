@@ -253,6 +253,7 @@ function Session() {
           <KaraokePlayer
             song={currentSong}
             isHost={isHost}
+            sessionId={sessionId}
           />
         ) : currentSong && (
           <Box sx={{ 
@@ -318,24 +319,9 @@ function Session() {
         </Grid>
       </Grid>
 
-      {/* Right Column - QR Code and Participants */}
+      {/* Right Column - Participants */}
       <Grid item xs={12} md={4}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
-          {/* QR Code - Only show for host */}
-          {isHost && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom align="center" sx={{ mb: 2 }}>
-                ID da Sessão: {sessionId}
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                <QRCodeCanvas value={sessionUrl} size={200} />
-              </Box>
-              <Typography align="center" sx={{ wordBreak: 'break-all' }}>
-                {sessionUrl}
-              </Typography>
-            </Paper>
-          )}
-
           {/* Participants List */}
           <Paper sx={{ p: 2, flex: 1 }}>
             <ParticipantsList

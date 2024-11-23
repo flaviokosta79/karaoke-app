@@ -8,11 +8,10 @@ const getBackendUrl = () => {
   const isLocalNetwork = !window.location.hostname.includes('localhost');
   if (isLocalNetwork) {
     // Use the same hostname as the frontend
-    return `http://${window.location.hostname}:5000`;
+    return `http://${window.location.hostname}:5002`;
   }
-
-  // When running locally, connect to the local backend
-  return 'http://192.168.101.246:5000';
+  
+  return 'http://localhost:5002';
 };
 
 export const config = {
