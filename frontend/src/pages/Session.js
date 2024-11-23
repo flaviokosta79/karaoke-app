@@ -1,21 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  Container,
+  Grid,
   Box,
   Typography,
   Paper,
-  Avatar,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Grid,
+  TextField,
 } from '@mui/material';
 import { io } from 'socket.io-client';
+import { QRCodeCanvas } from 'qrcode.react';
+import KaraokePlayer from '../components/session/KaraokePlayer';
+import ParticipantsList from '../components/session/ParticipantsList';
+import SongQueue from '../components/session/SongQueue';
 import SongList from '../components/SongList';
-import SongQueue from '../components/SongQueue';
-import KaraokePlayer from '../components/KaraokePlayer';
 import { config } from '../config';
 
 function Session() {
@@ -27,6 +24,9 @@ function Session() {
   const [currentSong, setCurrentSong] = useState(null);
   const [songQueue, setSongQueue] = useState([]);
   const [isHost, setIsHost] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const sessionUrl = `${window.location.origin}/setup/${sessionId}`;
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('userData'));
@@ -101,10 +101,16 @@ function Session() {
     }
     
     try {
-      console.log('Adding song to queue:', song);
+      const userData = JSON.parse(localStorage.getItem('userData'));
+      const songWithUser = {
+        ...song,
+        user: userData.name
+      };
+      
+      console.log('Adding song to queue:', songWithUser);
       socket.emit('addToQueue', {
         sessionId,
-        song
+        song: songWithUser
       });
     } catch (error) {
       console.error('Error adding song to queue:', error);
@@ -150,79 +156,79 @@ function Session() {
 
   if (error) {
     return (
-      <Container>
+      <Box sx={{ p: 3 }}>
         <Typography color="error">{error}</Typography>
-      </Container>
+      </Box>
     );
   }
 
   return (
-    <Container>
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Typography variant="h4" gutterBottom>
-            Session: {sessionId}
-          </Typography>
-        </Grid>
-
-        {/* Karaoke Player */}
-        <Grid item xs={12}>
+    <Box sx={{ flexGrow: 1, height: 'calc(100vh - 128px)' }}>
+      <Grid container spacing={2} sx={{ height: '100%' }}>
+        {/* Player Area */}
+        <Grid item xs={12} md={8}>
           <KaraokePlayer
             song={currentSong}
             socket={socket}
             sessionId={sessionId}
             isHost={isHost}
           />
-        </Grid>
-
-        {/* Connected Users */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Connected Users ({users.length})
-            </Typography>
-            <List>
-              {users.map((user) => (
-                <ListItem key={user.id}>
-                  <ListItemAvatar>
-                    <Avatar>{user.name[0]}</Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={user.name}
-                    secondary={user.isHost ? 'Host' : 'Participant'}
+          <Box sx={{ mt: 2, height: 'calc(100% - 432px)' }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <SongQueue 
+                  songs={songQueue}
+                  onRemove={handleRemoveFromQueue}
+                  onPlay={handlePlaySong}
+                  isHost={isHost}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper elevation={3} sx={{ p: 2, height: '100%', backgroundColor: 'background.paper' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Músicas Disponíveis
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Buscar músicas..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    sx={{ mb: 2 }}
                   />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
+                  <Box sx={{ overflow: 'auto', maxHeight: 'calc(100% - 100px)' }}>
+                    <SongList 
+                      onAddToQueue={handleAddToQueue}
+                      searchTerm={searchTerm}
+                    />
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
         </Grid>
 
-        {/* Song Queue */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Song Queue ({songQueue.length})
-            </Typography>
-            <SongQueue
-              songs={songQueue}
-              onRemove={handleRemoveFromQueue}
-              onPlay={handlePlaySong}
-              isHost={isHost}
-            />
-          </Paper>
-        </Grid>
-
-        {/* Song List */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Available Songs
-            </Typography>
-            <SongList onAddToQueue={handleAddToQueue} />
-          </Paper>
+        {/* Sidebar */}
+        <Grid item xs={12} md={4} sx={{ height: '100%' }}>
+          <Grid container spacing={2} direction="column">
+            <Grid item sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Paper elevation={3} sx={{ p: 2, backgroundColor: 'background.paper', textAlign: 'center' }}>
+                <Typography variant="h6" gutterBottom>
+                  ID da Sessão: {sessionId}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, wordBreak: 'break-all' }}>
+                  URL: {sessionUrl}
+                </Typography>
+                <QRCodeCanvas value={sessionUrl} size={200} level="H" />
+              </Paper>
+            </Grid>
+            <Grid item sx={{ flexGrow: 1 }}>
+              <ParticipantsList users={users} />
+            </Grid>
+          </Grid>
         </Grid>
       </Grid>
-    </Container>
+    </Box>
   );
 }
 

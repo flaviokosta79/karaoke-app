@@ -5,17 +5,13 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
-  TextField,
-  Paper,
   Typography,
-  Box,
 } from '@mui/material';
-import { QueueMusic, Search } from '@mui/icons-material';
+import { QueueMusic } from '@mui/icons-material';
 import { config } from '../config';
 
-function SongList({ onAddToQueue }) {
+function SongList({ onAddToQueue, searchTerm = '' }) {
   const [songs, setSongs] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [filteredSongs, setFilteredSongs] = useState([]);
 
   useEffect(() => {
@@ -24,7 +20,7 @@ function SongList({ onAddToQueue }) {
 
   useEffect(() => {
     filterSongs();
-  }, [searchQuery, songs]);
+  }, [searchTerm, songs]);
 
   const fetchSongs = async () => {
     try {
@@ -40,40 +36,24 @@ function SongList({ onAddToQueue }) {
   const filterSongs = () => {
     const filtered = songs.filter(
       song =>
-        song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+        song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        song.artist.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredSongs(filtered);
   };
 
   return (
-    <Paper sx={{ p: 2, maxHeight: '70vh', overflow: 'auto' }}>
-      <Box sx={{ mb: 2 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search songs..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: <Search color="action" sx={{ mr: 1 }} />,
-          }}
-        />
-      </Box>
-
-      <List>
-        {filteredSongs.map((song) => (
+    <List sx={{ overflow: 'auto' }}>
+      {filteredSongs.length === 0 ? (
+        <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+          Nenhuma música encontrada
+        </Typography>
+      ) : (
+        filteredSongs.map((song) => (
           <ListItem key={song.id} divider>
             <ListItemText
               primary={song.title}
-              secondary={
-                <>
-                  <Typography component="span" variant="body2" color="text.primary">
-                    {song.artist}
-                  </Typography>
-                  {' — '}{song.duration}
-                </>
-              }
+              secondary={song.artist}
             />
             <ListItemSecondaryAction>
               <IconButton
@@ -85,9 +65,9 @@ function SongList({ onAddToQueue }) {
               </IconButton>
             </ListItemSecondaryAction>
           </ListItem>
-        ))}
-      </List>
-    </Paper>
+        ))
+      )}
+    </List>
   );
 }
 
