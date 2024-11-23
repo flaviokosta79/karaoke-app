@@ -1,222 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Paper,
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   Typography,
-  Stack,
-  alpha,
-  Box
+  Box,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   PlayArrow as PlayArrowIcon,
-  DragIndicator as DragIndicatorIcon,
+  DragHandle as DragHandleIcon,
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-const DroppableComponent = React.memo(({ children }) => {
-  return (
-    <Droppable droppableId="songQueue">
-      {(provided, snapshot) => (
-        <List
-          ref={provided.innerRef}
-          {...provided.droppableProps}
-          sx={{
-            width: '100%',
-            bgcolor: 'background.paper',
-            borderRadius: 1,
-            overflow: 'auto',
-            maxHeight: '400px',
-            position: 'relative',
-            '& > *': {
-              // Garante que todos os itens permaneçam visíveis
-              position: 'relative',
-              zIndex: 1
-            },
-            // Estilo do scrollbar
-            '&::-webkit-scrollbar': {
-              width: '8px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: theme => alpha(theme.palette.primary.main, 0.2),
-              borderRadius: '4px',
-            },
-            '&::-webkit-scrollbar-thumb:hover': {
-              background: theme => alpha(theme.palette.primary.main, 0.3),
-            }
-          }}
-        >
-          {children}
-          {provided.placeholder}
-        </List>
-      )}
-    </Droppable>
-  );
-});
-
-const DraggableItem = React.memo(({ song, index, isHost, currentUser, onRemove, onPlay, isMobile }) => {
-  // Host pode gerenciar todas as músicas, usuário normal só as próprias
-  const canManage = isHost || song.user === currentUser;
-  // Host pode arrastar qualquer música, usuário normal só as próprias
-  const canDrag = isHost || song.user === currentUser;
-
-  return (
-    <Draggable
-      draggableId={`song-${song.id}-${index}`}
-      index={index}
-      isDragDisabled={!canDrag}
-    >
-      {(provided, snapshot) => (
-        <ListItem
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          sx={{
-            py: isMobile ? 2 : 1,
-            position: 'relative',
-            flexDirection: isMobile ? 'column' : 'row',
-            alignItems: isMobile ? 'flex-start' : 'center',
-            borderRadius: '8px',
-            margin: '4px 0',
-            border: theme => `1px solid ${snapshot.isDragging ? theme.palette.primary.main : 'transparent'}`,
-            backgroundColor: theme => {
-              if (snapshot.isDragging) {
-                return alpha(theme.palette.primary.main, 0.1);
-              }
-              return canDrag ? 'background.paper' : 'background.default';
-            },
-            transition: 'all 0.2s ease',
-            '&:hover': {
-              backgroundColor: theme => canDrag ? alpha(theme.palette.primary.main, 0.05) : 'background.default',
-            },
-            boxShadow: snapshot.isDragging ? '0 4px 8px rgba(0,0,0,0.1)' : 'none',
-            // Garante que o item arrastado fique sempre visível
-            zIndex: snapshot.isDragging ? 1000 : 1
-          }}
-        >
-          <div {...provided.dragHandleProps} style={{ 
-            cursor: canDrag ? 'grab' : 'default',
-            opacity: canDrag ? 1 : 0.5,
-            display: 'flex',
-            alignItems: 'center',
-            // Mantém o ícone de arrasto sempre visível
-            position: 'relative',
-            zIndex: 2
-          }}>
-            <DragIndicatorIcon 
-              sx={{ 
-                mr: 2,
-                color: theme => canDrag 
-                  ? snapshot.isDragging 
-                    ? theme.palette.primary.main 
-                    : theme.palette.text.secondary
-                  : theme.palette.text.disabled,
-                transform: snapshot.isDragging ? 'rotate(-5deg) scale(1.1)' : 'none',
-                transition: 'all 0.2s ease'
-              }} 
-            />
-          </div>
-          <ListItemText 
-            primary={song.title}
-            secondary={
-              <Typography variant="body2" component="span">
-                {song.artist} • Adicionado por <strong>{song.user}</strong>
-              </Typography>
-            }
-            sx={{
-              m: 0,
-              flex: 1,
-              '& .MuiListItemText-primary': {
-                fontWeight: snapshot.isDragging ? 500 : 400,
-                color: snapshot.isDragging ? 'primary.main' : 'text.primary',
-                // Mantém o texto sempre visível
-                position: 'relative',
-                zIndex: 2
-              }
-            }}
-          />
-          <Box sx={{ 
-            display: 'flex', 
-            gap: 1, 
-            ml: 'auto',
-            opacity: snapshot.isDragging ? 0.5 : 1,
-            // Mantém os botões sempre visíveis
-            position: 'relative',
-            zIndex: 2
-          }}>
-            {canManage && (
-              <IconButton
-                onClick={() => onRemove(index)}
-                size="small"
-                sx={{
-                  color: 'error.main',
-                  '&:hover': {
-                    backgroundColor: theme => alpha(theme.palette.error.main, 0.1)
-                  }
-                }}
-              >
-                <DeleteIcon />
-              </IconButton>
-            )}
-            {isHost && (
-              <IconButton
-                onClick={() => onPlay(index)}
-                size="small"
-                sx={{
-                  color: 'success.main',
-                  '&:hover': {
-                    backgroundColor: theme => alpha(theme.palette.success.main, 0.1)
-                  }
-                }}
-              >
-                <PlayArrowIcon />
-              </IconButton>
-            )}
-          </Box>
-        </ListItem>
-      )}
-    </Draggable>
-  );
-});
-
-const SongQueue = ({ songs = [], onRemove, onReorder, onPlay, isHost, currentUser, isMobile }) => {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
+function SongQueue({ songs = [], onRemove, onReorder, onPlay, isHost, currentUser, isMobile }) {
   const handleDragEnd = (result) => {
     if (!result.destination) return;
-
-    const sourceIndex = result.source.index;
-    const destinationIndex = result.destination.index;
-
-    if (sourceIndex === destinationIndex) return;
-
-    onReorder(sourceIndex, destinationIndex);
+    onReorder(result.source.index, result.destination.index);
   };
 
-  if (!mounted) return null;
+  // Função para verificar se uma música pode ser movida
+  const canMoveSong = (index) => {
+    if (isHost) return true;
+    const song = songs[index];
+    if (song.user !== currentUser) return false;
+
+    // Verifica se tem músicas adjacentes do mesmo usuário
+    const prevSong = index > 0 ? songs[index - 1] : null;
+    const nextSong = index < songs.length - 1 ? songs[index + 1] : null;
+    return (prevSong && prevSong.user === currentUser) || (nextSong && nextSong.user === currentUser);
+  };
 
   return (
     <Paper 
-      elevation={0} 
+      elevation={3} 
       sx={{ 
-        width: '100%', 
-        bgcolor: 'background.default',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
-        minHeight: isMobile ? 300 : 400, // Altura mínima consistente
-        maxHeight: isMobile ? '50vh' : '70vh' // Altura máxima responsiva
+        bgcolor: 'background.paper',
+        overflow: 'hidden', // Importante para conter o scroll
       }}
     >
       <Box sx={{ 
@@ -239,24 +64,127 @@ const SongQueue = ({ songs = [], onRemove, onReorder, onPlay, isHost, currentUse
         flexDirection: 'column'
       }}>
         <DragDropContext onDragEnd={handleDragEnd}>
-          <DroppableComponent>
-            {songs.map((song, index) => (
-              <DraggableItem
-                key={`${song.id}-${index}`}
-                song={song}
-                index={index}
-                isHost={isHost}
-                currentUser={currentUser}
-                onRemove={onRemove}
-                onPlay={onPlay}
-                isMobile={isMobile}
-              />
-            ))}
-          </DroppableComponent>
+          <Droppable droppableId="songQueue">
+            {(provided) => (
+              <List
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                sx={{
+                  flex: 1,
+                  overflow: 'auto',
+                  overscrollBehavior: 'contain', // Previne scroll propagation
+                  minHeight: 0, // Importante para o flex container
+                  '&::-webkit-scrollbar': {
+                    width: '8px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    backgroundColor: 'rgba(0,0,0,0.1)',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    borderRadius: '4px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                    },
+                  },
+                }}
+              >
+                {songs.map((song, index) => {
+                  const isCurrentUserSong = song.user === currentUser;
+                  const canMove = canMoveSong(index);
+
+                  return (
+                    <Draggable
+                      key={`song-${song.id}-${index}`}
+                      draggableId={`song-${song.id}-${index}`}
+                      index={index}
+                      isDragDisabled={!isHost && !canMove}
+                    >
+                      {(provided, snapshot) => (
+                        <ListItem
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          sx={{
+                            pl: 1,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: snapshot.isDragging ? 'action.hover' : 'transparent',
+                            opacity: (!isHost && !canMove) ? 0.7 : 1,
+                            '&:hover': {
+                              bgcolor: 'action.hover',
+                              '& .drag-handle': {
+                                visibility: (isHost || canMove) ? 'visible' : 'hidden',
+                              }
+                            },
+                          }}
+                        >
+                          <Box
+                            {...provided.dragHandleProps}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              visibility: snapshot.isDragging ? 'visible' : 'hidden',
+                              cursor: (isHost || canMove) ? 'grab' : 'not-allowed',
+                            }}
+                            className="drag-handle"
+                          >
+                            <DragHandleIcon 
+                              sx={{ 
+                                color: (isHost || canMove) ? 'text.secondary' : 'text.disabled',
+                                mr: 1 
+                              }} 
+                            />
+                          </Box>
+
+                          <ListItemText
+                            primary={song.title}
+                            secondary={
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                  color: isCurrentUserSong ? 'primary.main' : 'text.secondary',
+                                }}
+                              >
+                                {song.artist} • {song.user}
+                              </Typography>
+                            }
+                          />
+
+                          {isHost && (
+                            <IconButton
+                              size="small"
+                              onClick={() => onPlay(index)}
+                              sx={{ mr: 1 }}
+                            >
+                              <PlayArrowIcon />
+                            </IconButton>
+                          )}
+
+                          {(isHost || isCurrentUserSong) && (
+                            <IconButton
+                              size="small"
+                              onClick={() => onRemove(index)}
+                              sx={{ color: 'error.main' }}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </ListItem>
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {provided.placeholder}
+              </List>
+            )}
+          </Droppable>
         </DragDropContext>
       </Box>
     </Paper>
   );
-};
+}
 
-export default React.memo(SongQueue);
+export default SongQueue;

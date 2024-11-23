@@ -170,23 +170,47 @@ function Session() {
 
     try {
       const sourceMusic = songQueue[sourceIndex];
-      if (isHost || sourceMusic.user === currentUser) {
-        // Atualiza o estado local imediatamente
-        const newQueue = Array.from(songQueue);
-        const [removed] = newQueue.splice(sourceIndex, 1);
-        newQueue.splice(destinationIndex, 0, removed);
-        setSongQueue(newQueue);
 
-        // Envia a atualização para o servidor
-        console.log('Reordering queue from index', sourceIndex, 'to', destinationIndex);
-        socket.emit('reorderQueue', {
-          sessionId,
-          sourceIndex,
-          destinationIndex
-        });
-      } else {
-        console.error('User does not have permission to move this song');
+      // Se não for host, verifica se pode mover
+      if (!isHost) {
+        // Verifica se a música é do usuário atual
+        if (sourceMusic.user !== currentUser) {
+          console.error('User does not have permission to move this song');
+          return;
+        }
+
+        // Verifica se está tentando mover para uma posição adjacente
+        const isMovingUp = destinationIndex < sourceIndex;
+        const isMovingDown = destinationIndex > sourceIndex;
+
+        if (isMovingUp) {
+          // Ao mover para cima, verifica se a música acima é do mesmo usuário
+          if (sourceIndex > 0 && songQueue[sourceIndex - 1].user !== currentUser) {
+            console.error('Cannot move song past another user\'s song');
+            return;
+          }
+        } else if (isMovingDown) {
+          // Ao mover para baixo, verifica se a música abaixo é do mesmo usuário
+          if (sourceIndex < songQueue.length - 1 && songQueue[sourceIndex + 1].user !== currentUser) {
+            console.error('Cannot move song past another user\'s song');
+            return;
+          }
+        }
       }
+
+      // Atualiza o estado local imediatamente
+      const newQueue = Array.from(songQueue);
+      const [removed] = newQueue.splice(sourceIndex, 1);
+      newQueue.splice(destinationIndex, 0, removed);
+      setSongQueue(newQueue);
+
+      // Envia a atualização para o servidor
+      console.log('Reordering queue from index', sourceIndex, 'to', destinationIndex);
+      socket.emit('reorderQueue', {
+        sessionId,
+        sourceIndex,
+        destinationIndex
+      });
     } catch (error) {
       console.error('Error reordering queue:', error);
       setError('Failed to reorder song queue');
@@ -230,7 +254,7 @@ function Session() {
             song={currentSong}
             isHost={isHost}
           />
-        ) : (
+        ) : currentSong && (
           <Box sx={{ 
             height: 100, 
             display: 'flex', 
@@ -241,7 +265,7 @@ function Session() {
             mb: 2
           }}>
             <Typography variant="h6" color="text.secondary">
-              {currentSong ? `Tocando: ${currentSong.title} - ${currentSong.artist}` : 'Aguardando música...'}
+              Tocando: {currentSong.title} - {currentSong.artist}
             </Typography>
           </Box>
         )}
@@ -258,36 +282,30 @@ function Session() {
 
         {/* Main Content Area */}
         <Grid container spacing={2}>
-          {/* Song Queue and Participants List */}
+          {/* Song Queue */}
           <Grid item xs={12} md={6}>
             <Box sx={{ 
+              height: isMobile ? '400px' : 'calc(100vh - 300px)',
               display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
-              height: isMobile ? 'auto' : 'calc(100vh - 250px)',
+              flexDirection: 'column'
             }}>
-              {/* Song Queue */}
-              <Box sx={{ 
-                flex: isMobile ? 'none' : 2,
-                minHeight: isMobile ? 300 : 0
-              }}>
-                <SongQueue
-                  songs={songQueue}
-                  onRemove={handleRemoveFromQueue}
-                  onReorder={handleReorderQueue}
-                  onPlay={handlePlaySong}
-                  isHost={isHost}
-                  currentUser={currentUser}
-                />
-              </Box>
+              <SongQueue
+                songs={songQueue}
+                onRemove={handleRemoveFromQueue}
+                onReorder={handleReorderQueue}
+                onPlay={handlePlaySong}
+                isHost={isHost}
+                currentUser={currentUser}
+              />
             </Box>
           </Grid>
 
           {/* Song List */}
           <Grid item xs={12} md={6}>
             <Box sx={{ 
-              height: isMobile ? 400 : 'calc(100vh - 250px)',
-              overflow: 'auto'
+              height: isMobile ? '400px' : 'calc(100vh - 300px)',
+              display: 'flex',
+              flexDirection: 'column'
             }}>
               <SongList
                 onAddToQueue={handleAddToQueue}
@@ -300,11 +318,11 @@ function Session() {
         </Grid>
       </Grid>
 
-      {/* QR Code Area - Only show for host on desktop */}
-      {!isMobile && isHost && (
-        <Grid item xs={12} md={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
-            {/* QR Code */}
+      {/* Right Column - QR Code and Participants */}
+      <Grid item xs={12} md={4}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
+          {/* QR Code - Only show for host */}
+          {isHost && (
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom align="center" sx={{ mb: 2 }}>
                 ID da Sessão: {sessionId}
@@ -316,31 +334,18 @@ function Session() {
                 {sessionUrl}
               </Typography>
             </Paper>
+          )}
 
-            {/* Participants List for Desktop */}
-            <Paper sx={{ p: 2, flex: 1 }}>
-              <ParticipantsList
-                users={users}
-                currentUser={currentUser}
-                isHost={isHost}
-              />
-            </Paper>
-          </Box>
-        </Grid>
-      )}
-
-      {/* Participants List for non-host or mobile */}
-      {(!isHost || isMobile) && (
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2, height: '100%' }}>
+          {/* Participants List */}
+          <Paper sx={{ p: 2, flex: 1 }}>
             <ParticipantsList
               users={users}
               currentUser={currentUser}
               isHost={isHost}
             />
           </Paper>
-        </Grid>
-      )}
+        </Box>
+      </Grid>
     </Grid>
   );
 }

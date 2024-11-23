@@ -52,105 +52,131 @@ function SongList({ onAddToQueue, onPlay, searchTerm = '', isHost }) {
   };
 
   return (
-    <List sx={{ overflow: 'auto' }}>
-      {filteredSongs.length === 0 ? (
-        <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-          Nenhuma música encontrada
-        </Typography>
-      ) : (
-        filteredSongs.map((song) => (
-          <ListItem
-            key={song.id}
-            divider
-            sx={{
-              py: isMobile ? 2 : 1,
-              position: 'relative',
-              flexDirection: isMobile ? 'column' : 'row',
-              alignItems: isMobile ? 'flex-start' : 'center',
-              '&:active': {
-                backgroundColor: theme => theme.palette.action.selected,
-              },
-            }}
-          >
-            <Box 
-              onClick={() => onAddToQueue(song)}
-              sx={{ 
-                flex: 1,
-                width: '100%',
-                cursor: 'pointer',
-                pr: isMobile ? 0 : 10,
-                mb: isMobile ? 2 : 0,
+    <Box sx={{ 
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+    }}>
+      <List 
+        sx={{ 
+          flex: 1,
+          overflow: 'auto',
+          overscrollBehavior: 'contain',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: 'rgba(0,0,0,0.1)',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: 'rgba(0,0,0,0.2)',
+            borderRadius: '4px',
+            '&:hover': {
+              backgroundColor: 'rgba(0,0,0,0.3)',
+            },
+          },
+        }}
+      >
+        {filteredSongs.length === 0 ? (
+          <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+            Nenhuma música encontrada
+          </Typography>
+        ) : (
+          filteredSongs.map((song) => (
+            <ListItem
+              key={song.id}
+              divider
+              sx={{
+                py: isMobile ? 2 : 1,
+                position: 'relative',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
                 '&:active': {
-                  opacity: 0.7,
+                  backgroundColor: theme => theme.palette.action.selected,
                 },
               }}
             >
-              <ListItemText
-                primary={song.title}
-                secondary={song.artist}
-                primaryTypographyProps={{
-                  sx: { 
-                    fontWeight: 500,
-                    fontSize: isMobile ? '1.1rem' : 'inherit'
-                  }
-                }}
-                secondaryTypographyProps={{
-                  sx: { 
-                    fontSize: isMobile ? '0.9rem' : 'inherit'
-                  }
-                }}
-              />
-            </Box>
-            <Box
-              sx={{
-                position: isMobile ? 'relative' : 'absolute',
-                right: isMobile ? 0 : 8,
-                width: isMobile ? '100%' : 'auto',
-                display: 'flex',
-                justifyContent: isMobile ? 'space-between' : 'flex-end',
-                mt: isMobile ? 1 : 0
-              }}
-            >
-              <Stack 
-                direction="row" 
-                spacing={2}
-                sx={{
-                  width: isMobile ? '100%' : 'auto',
-                  '& .MuiIconButton-root': {
-                    flex: isMobile ? 1 : 'none',
-                    height: isMobile ? 44 : 40,
-                  }
+              <Box 
+                onClick={() => onAddToQueue(song)}
+                sx={{ 
+                  flex: 1,
+                  width: '100%',
+                  cursor: 'pointer',
+                  pr: isMobile ? 0 : 10,
+                  mb: isMobile ? 2 : 0,
+                  '&:active': {
+                    opacity: 0.7,
+                  },
                 }}
               >
-                {isHost && (
-                  <IconButton
-                    edge="end"
-                    aria-label="play now"
-                    onClick={() => onPlay(song)}
-                    color="primary"
-                    sx={{
-                      backgroundColor: theme => theme.palette.primary.main + '1A',
-                    }}
-                  >
-                    <PlayArrowIcon />
-                  </IconButton>
-                )}
-                <IconButton
-                  edge="end"
-                  aria-label="add to queue"
-                  onClick={() => onAddToQueue(song)}
+                <ListItemText
+                  primary={song.title}
+                  secondary={song.artist}
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: 500,
+                      fontSize: isMobile ? '1.1rem' : 'inherit'
+                    }
+                  }}
+                  secondaryTypographyProps={{
+                    sx: { 
+                      fontSize: isMobile ? '0.9rem' : 'inherit'
+                    }
+                  }}
+                />
+              </Box>
+              <Box
+                sx={{
+                  position: isMobile ? 'relative' : 'absolute',
+                  right: isMobile ? 0 : 8,
+                  width: isMobile ? '100%' : 'auto',
+                  display: 'flex',
+                  justifyContent: isMobile ? 'space-between' : 'flex-end',
+                  mt: isMobile ? 1 : 0
+                }}
+              >
+                <Stack 
+                  direction="row" 
+                  spacing={2}
                   sx={{
-                    backgroundColor: theme => theme.palette.action.hover,
+                    width: isMobile ? '100%' : 'auto',
+                    '& .MuiIconButton-root': {
+                      flex: isMobile ? 1 : 'none',
+                      height: isMobile ? 44 : 40,
+                    }
                   }}
                 >
-                  <QueueMusic />
-                </IconButton>
-              </Stack>
-            </Box>
-          </ListItem>
-        ))
-      )}
-    </List>
+                  {isHost && (
+                    <IconButton
+                      edge="end"
+                      aria-label="play now"
+                      onClick={() => onPlay(song)}
+                      color="primary"
+                      sx={{
+                        backgroundColor: theme => theme.palette.primary.main + '1A',
+                      }}
+                    >
+                      <PlayArrowIcon />
+                    </IconButton>
+                  )}
+                  <IconButton
+                    edge="end"
+                    aria-label="add to queue"
+                    onClick={() => onAddToQueue(song)}
+                    sx={{
+                      backgroundColor: theme => theme.palette.action.hover,
+                    }}
+                  >
+                    <QueueMusic />
+                  </IconButton>
+                </Stack>
+              </Box>
+            </ListItem>
+          ))
+        )}
+      </List>
+    </Box>
   );
 }
 
