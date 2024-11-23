@@ -229,6 +229,52 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Failed to play song' });
     }
   });
+
+  socket.on('reorderQueue', ({ sessionId, sourceIndex, destinationIndex }) => {
+    try {
+      console.log(`Reordering queue in session ${sessionId} from ${sourceIndex} to ${destinationIndex}`);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        console.error(`Session ${sessionId} not found`);
+        socket.emit('error', { message: 'Session not found' });
+        return;
+      }
+
+      if (!session.songQueue) {
+        session.songQueue = [];
+        return;
+      }
+
+      // Verifica se os índices são válidos
+      if (sourceIndex >= 0 && sourceIndex < session.songQueue.length &&
+          destinationIndex >= 0 && destinationIndex < session.songQueue.length) {
+        // Remove a música da posição original e a insere na nova posição
+        const [movedSong] = session.songQueue.splice(sourceIndex, 1);
+        session.songQueue.splice(destinationIndex, 0, movedSong);
+        
+        console.log(`Updated song queue after reorder:`, session.songQueue);
+        // Emite a fila atualizada para todos os clientes na sessão
+        io.to(sessionId).emit('songQueue', session.songQueue);
+      } else {
+        console.error(`Invalid indices for reorder: source=${sourceIndex}, destination=${destinationIndex}`);
+        socket.emit('error', { message: 'Invalid indices for reorder' });
+      }
+    } catch (error) {
+      console.error('Error reordering queue:', error);
+      socket.emit('error', { message: 'Failed to reorder queue' });
+    }
+  });
+
+  socket.on('requestQueueUpdate', ({ sessionId }) => {
+    try {
+      const session = sessions.get(sessionId);
+      if (session) {
+        socket.emit('songQueue', session.songQueue || []);
+      }
+    } catch (error) {
+      console.error('Error sending queue update:', error);
+    }
+  });
 });
 
 // Start server
