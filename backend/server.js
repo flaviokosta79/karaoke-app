@@ -15,8 +15,18 @@ const io = socketIo(server, {
   }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+  methods: ["GET", "POST"],
+  credentials: true
+}));
+
 app.use(express.json());
+
+// Rota de teste para verificar se o servidor está rodando
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 // Armazenamento em memória das sessões
 const sessions = new Map();
@@ -36,28 +46,28 @@ function generateSessionId() {
 app.post('/api/sessions', async (req, res) => {
   try {
     const sessionId = generateSessionId();
-    console.log('Criando nova sessão:', sessionId);
     
-    const qrCode = await QRCode.toDataURL(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/session/${sessionId}`);
-    
+    // Criar nova sessão
     sessions.set(sessionId, {
       id: sessionId,
       queue: [],
+      users: new Map(),
       currentSong: null,
-      participants: new Set(),
-      qrCode
+      isPlaying: false
     });
 
-    console.log('Sessão criada com sucesso:', sessionId);
-    console.log('Sessões ativas:', Array.from(sessions.keys()));
+    // Gerar QR Code
+    const sessionUrl = `${req.protocol}://${req.get('host')}/session/${sessionId}`;
+    const qrCode = await QRCode.toDataURL(sessionUrl);
 
-    res.json({ 
+    res.json({
       sessionId,
-      qrCode 
+      qrCode,
+      url: sessionUrl
     });
   } catch (error) {
-    console.error('Error creating session:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Erro ao criar sessão:', error);
+    res.status(500).json({ error: 'Erro ao criar sessão' });
   }
 });
 
@@ -81,6 +91,8 @@ app.get('/api/playlist', async (req, res) => {
 });
 
 // Lógica do Socket.IO
+let queueIdCounter = 0;
+
 io.on('connection', (socket) => {
   console.log('Novo cliente conectado:', socket.id);
 
@@ -92,7 +104,7 @@ io.on('connection', (socket) => {
     
     if (session) {
       console.log(`Sessão ${sessionId} encontrada`);
-      session.participants.add(socket.id);
+      session.users.set(socket.id, user);
       socket.join(sessionId);
       
       // Enviar estado atual da sessão
@@ -100,7 +112,7 @@ io.on('connection', (socket) => {
         isHost: user.isHost,
         currentSong: session.currentSong,
         queue: session.queue,
-        participants: Array.from(session.participants).length
+        participants: Array.from(session.users.values()).length
       };
       
       console.log(`Enviando estado da sessão para ${socket.id}:`, sessionState);
@@ -108,7 +120,7 @@ io.on('connection', (socket) => {
       
       // Notificar outros participantes
       io.to(sessionId).emit('participant-joined', { 
-        participantCount: session.participants.size,
+        participantCount: session.users.size,
         userName: user.name
       });
       
@@ -123,16 +135,29 @@ io.on('connection', (socket) => {
     console.log(`Adicionando música à fila da sessão ${sessionId}:`, song);
     const session = sessions.get(sessionId);
     if (session) {
-      session.queue.push({ ...song, addedBy: socket.id });
-      io.to(sessionId).emit('queueUpdate', session.queue);
+      // Adiciona um ID único para a instância da música na fila
+      const queueId = `queue-${queueIdCounter++}`;
+      console.log('Gerando queueId:', queueId);
       
-      // Se não houver música tocando, começar a tocar a primeira da fila
+      const newSong = { 
+        ...song, 
+        playing: false,
+        queueId // ID único para cada música na fila
+      };
+      session.queue.push(newSong);
+      console.log('Música adicionada com queueId:', newSong);
+      
+      // Se não houver música tocando e esta é a primeira música, começar a tocar
       if (!session.currentSong && session.queue.length === 1) {
-        session.currentSong = session.queue[0];
+        session.currentSong = { ...newSong };
+        session.queue[0].playing = true;
+        session.isPlaying = true;
         io.to(sessionId).emit('songChange', session.currentSong);
+        io.to(sessionId).emit('playingStateUpdate', session.isPlaying);
       }
       
-      console.log(`Fila atualizada para sessão ${sessionId}:`, session.queue);
+      io.to(sessionId).emit('queueUpdate', session.queue);
+      console.log('Estado atual da fila:', session.queue.map(s => ({ title: s.title, queueId: s.queueId })));
     }
   });
 
@@ -140,57 +165,121 @@ io.on('connection', (socket) => {
     console.log(`Removendo música do índice ${index} da sessão ${sessionId}`);
     const session = sessions.get(sessionId);
     if (session && session.queue[index]) {
+      const removedSong = session.queue[index];
+      const wasPlaying = removedSong.playing;
+      
+      // Remove a música da fila
       session.queue.splice(index, 1);
+
+      // Se a música removida estava tocando
+      if (wasPlaying) {
+        // Se ainda houver músicas na fila, toca a próxima
+        if (session.queue.length > 0) {
+          session.queue[0].playing = true;
+          io.to(sessionId).emit('songChange', session.queue[0]);
+        } else {
+          // Se não houver mais músicas, para a reprodução
+          io.to(sessionId).emit('playingStateUpdate', false);
+        }
+      }
+
       io.to(sessionId).emit('queueUpdate', session.queue);
       console.log(`Música removida da fila da sessão ${sessionId}`);
     }
   });
 
-  socket.on('playNext', ({ sessionId }) => {
-    console.log(`Tocando próxima música da sessão ${sessionId}`);
+  socket.on('songEnded', ({ sessionId }) => {
     const session = sessions.get(sessionId);
     if (session) {
-      // Remove a música atual da fila
-      if (session.currentSong) {
-        session.queue = session.queue.filter(song => song.id !== session.currentSong.id);
+      // Remove a primeira música da fila (que acabou)
+      session.queue.shift();
+
+      // Se ainda houver músicas na fila, toca a próxima
+      if (session.queue.length > 0) {
+        session.queue[0].playing = true;
+        io.to(sessionId).emit('songChange', session.queue[0]);
+      } else {
+        // Se não houver mais músicas, para a reprodução
+        io.to(sessionId).emit('playingStateUpdate', false);
       }
-      
-      // Pega a próxima música da fila
-      const nextSong = session.queue[0];
-      session.currentSong = nextSong || null;
-      
-      // Envia as atualizações para todos os clientes
-      io.to(sessionId).emit('songChange', session.currentSong);
+
       io.to(sessionId).emit('queueUpdate', session.queue);
-      
-      console.log(`Próxima música iniciada na sessão ${sessionId}:`, nextSong);
     }
   });
 
-  socket.on('reorderQueue', ({ sessionId, startIndex, endIndex }) => {
-    console.log(`Reordenando fila da sessão ${sessionId}: ${startIndex} -> ${endIndex}`);
+  socket.on('reorderQueue', ({ sessionId, queueId, newIndex }) => {
+    console.log(`Reordenando fila da sessão ${sessionId}: ${queueId} -> ${newIndex}`);
     const session = sessions.get(sessionId);
-    if (session && session.queue) {
-      const [removed] = session.queue.splice(startIndex, 1);
-      session.queue.splice(endIndex, 0, removed);
+    if (session) {
+      console.log('Estado da fila antes da reordenação:', 
+        session.queue.map(s => ({ title: s.title, queueId: s.queueId }))
+      );
+
+      // Encontra o item a ser movido
+      const songToMoveIndex = session.queue.findIndex(song => song.queueId === queueId);
+      if (songToMoveIndex !== -1) {
+        const songToMove = session.queue[songToMoveIndex];
+        console.log('Música a ser movida:', songToMove);
+
+        // Remove o item da posição original
+        session.queue.splice(songToMoveIndex, 1);
+
+        // Insere o item na nova posição
+        session.queue.splice(newIndex, 0, songToMove);
+        
+        // Atualiza o estado playing baseado no índice
+        session.queue.forEach((song, index) => {
+          song.playing = index === 0;
+        });
+        
+        console.log('Estado da fila após reordenação:', 
+          session.queue.map(s => ({ title: s.title, queueId: s.queueId }))
+        );
+        
+        io.to(sessionId).emit('queueUpdate', session.queue);
+      }
+    }
+  });
+
+  socket.on('playNext', ({ sessionId, index }) => {
+    const session = sessions.get(sessionId);
+    if (session && session.queue.length > 0) {
+      // Encontra e remove a música que está tocando atualmente
+      const currentPlayingIndex = session.queue.findIndex(song => song.playing);
+      if (currentPlayingIndex !== -1) {
+        session.queue.splice(currentPlayingIndex, 1);
+      }
+
+      // Se um índice específico foi fornecido, toca essa música
+      if (index !== undefined) {
+        session.queue[index].playing = true;
+        io.to(sessionId).emit('songChange', session.queue[index]);
+      } else if (session.queue.length > 0) {
+        // Se não houver índice específico, toca a primeira música da fila
+        session.queue[0].playing = true;
+        io.to(sessionId).emit('songChange', session.queue[0]);
+      } else {
+        // Se não houver mais músicas, para a reprodução
+        io.to(sessionId).emit('playingStateUpdate', false);
+      }
+
       io.to(sessionId).emit('queueUpdate', session.queue);
-      console.log(`Fila reordenada para sessão ${sessionId}:`, session.queue);
     }
   });
 
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id);
     sessions.forEach((session, sessionId) => {
-      if (session.participants.has(socket.id)) {
-        session.participants.delete(socket.id);
+      if (session.users.has(socket.id)) {
+        session.users.delete(socket.id);
         console.log(`Participante ${socket.id} removido da sessão ${sessionId}`);
         
-        if (session.participants.size === 0) {
+        if (session.users.size === 0) {
           sessions.delete(sessionId);
           console.log(`Sessão ${sessionId} removida por falta de participantes`);
         } else {
           io.to(sessionId).emit('participant-left', { 
-            participantCount: session.participants.size 
+            participantCount: session.users.size 
           });
           console.log(`Notificação de saída enviada para sessão ${sessionId}`);
         }

@@ -18,7 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { config } from '../../config';
 import io from 'socket.io-client';
-import YouTubePlayer from './YouTubePlayer';
+import YouTube from 'react-youtube';
 
 function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
   const {
@@ -28,7 +28,10 @@ function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: song.id });
+  } = useSortable({ 
+    id: song.queueId,
+    disabled: index === 0 
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -43,10 +46,10 @@ function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
       style={style}
       className={`bg-white p-4 rounded-lg shadow-sm ${
         isDragging ? 'shadow-lg ring-2 ring-pink-500 z-50' : ''
-      }`}
+      } ${song.playing ? 'ring-1 ring-pink-200' : ''}`}
     >
       <div className="flex items-center">
-        {isHost && (
+        {isHost && index !== 0 && ( 
           <div
             {...attributes}
             {...listeners}
@@ -57,7 +60,19 @@ function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
         )}
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate">{song.title}</div>
-          <div className="text-sm text-gray-600 truncate">{song.artist}</div>
+          <div className="text-sm text-gray-600 truncate">
+            {song.artist}
+            {song.playing && (
+              <span className="ml-2 text-pink-500 text-xs font-medium">
+                • Tocando
+              </span>
+            )}
+            {index === 1 && !song.playing && (
+              <span className="ml-2 text-blue-500 text-xs font-medium">
+                • Próxima
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 ml-2">
           {isHost && (
@@ -80,7 +95,8 @@ function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
   );
 }
 
-function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
+function KaraokePlayer({ socket, sessionId }) {
+  const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [currentVideoId, setCurrentVideoId] = useState(null);
@@ -99,145 +115,100 @@ function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
   ]);
 
   const playerRef = useRef(null);
-  const audioRef = useRef(null);
-  const socketRef = useRef();
 
   useEffect(() => {
-    console.log('Initializing socket connection...');
-    console.log('Backend URL:', config.backendUrl);
-    console.log('Session ID:', sessionId);
-    
-    // Recuperar dados do usuário
-    const userId = localStorage.getItem('userId');
-    const userName = localStorage.getItem('userName');
-    const isHost = localStorage.getItem('isHost') === 'true';
-    const userColor = localStorage.getItem('userColor');
+    if (!socket) return;
 
-    if (!userId || !userName) {
-      console.error('Missing user data');
-      return;
-    }
-
-    // Criar conexão do socket
-    socketRef.current = io(config.backendUrl, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-    
-    socketRef.current.on('connect', () => {
-      console.log('Socket connected successfully');
-      
-      // Enviar dados do usuário ao entrar na sessão
-      const userData = {
-        id: userId,
-        name: userName,
-        isHost: isHost,
-        color: userColor ? JSON.parse(userColor) : null
-      };
-
-      console.log('Joining session with data:', {
-        sessionId,
-        user: userData
-      });
-
-      socketRef.current.emit('joinSession', {
-        sessionId,
-        user: userData
-      });
+    socket.on('songChange', (song) => {
+      setCurrentSong(song);
+      setIsPlaying(true);
+      if (playerRef.current) {
+        playerRef.current.loadVideoById(song.videoId);
+        playerRef.current.playVideo();
+      }
     });
 
-    socketRef.current.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+    socket.on('playingStateUpdate', (isPlaying) => {
+      setIsPlaying(isPlaying);
+      if (!isPlaying) {
+        setCurrentSong(null);
+        if (playerRef.current) {
+          playerRef.current.stopVideo();
+          playerRef.current.clearVideo();
+        }
+      }
     });
 
-    socketRef.current.on('error', (error) => {
-      console.error('Socket error:', error);
-    });
-
-    // Ouvir atualizações da fila
-    socketRef.current.on('queueUpdate', (updatedQueue) => {
-      console.log('Queue updated:', updatedQueue);
+    socket.on('queueUpdate', (updatedQueue) => {
       setSongQueue(updatedQueue);
     });
 
-    // Ouvir mudanças de música
-    socketRef.current.on('songChange', (song) => {
-      console.log('Song changed:', song);
-      if (song) {
-        setCurrentVideoId(song.videoId);
-      }
-    });
-
-    // Ouvir estado da sessão
-    socketRef.current.on('sessionState', (state) => {
-      console.log('Received session state:', state);
-      if (state.currentSong) {
-        setCurrentVideoId(state.currentSong.videoId);
-      }
-      if (state.queue) {
-        setSongQueue(state.queue);
-      }
-    });
-
     return () => {
-      console.log('Cleaning up socket connection');
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      socket.off('songChange');
+      socket.off('playingStateUpdate');
+      socket.off('queueUpdate');
     };
-  }, [sessionId]);
+  }, [socket]);
+
+  const onPlayerReady = (event) => {
+    playerRef.current = event.target;
+    playerRef.current.setVolume(volume * 100);
+  };
+
+  const onPlayerStateChange = (event) => {
+    if (event.data === 0) {
+      setIsPlaying(false);
+      socket.emit('songEnded', { sessionId });
+    }
+  };
 
   const addToQueue = (song) => {
-    console.log('Adding song to queue:', song);
-    console.log('Session ID:', sessionId);
-    console.log('Socket connected:', socketRef.current?.connected);
-    
-    if (!socketRef.current?.connected) {
+    if (!socket?.connected) {
       console.error('Socket not connected');
       return;
     }
 
     const songData = {
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      videoId: song.videoId,
-      cover: song.cover
+      ...song,
+      user: localStorage.getItem('userId'),
+      userName: localStorage.getItem('userName')
     };
 
-    console.log('Emitting addToQueue event with data:', {
-      sessionId,
-      song: songData
-    });
-
-    socketRef.current.emit('addToQueue', {
+    socket.emit('addToQueue', {
       sessionId,
       song: songData
     });
   };
 
-  const playNext = () => {
-    if (!socketRef.current?.connected) {
-      console.error('Socket not connected');
-      return;
+  const playNext = (index) => {
+    if (socket?.connected) {
+      socket.emit('playNext', { sessionId, index });
     }
-
-    console.log('Playing next song');
-    socketRef.current.emit('playNext', { sessionId });
   };
 
   const removeFromQueue = (index) => {
-    console.log('Removing song at index:', index);
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('removeFromQueue', { sessionId, index });
+    if (socket?.connected) {
+      socket.emit('removeFromQueue', { sessionId, index });
     }
   };
 
   const reorderQueue = (startIndex, endIndex) => {
-    console.log('Reordering queue:', { startIndex, endIndex });
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('reorderQueue', { sessionId, startIndex, endIndex });
+    if (socket?.connected) {
+      socket.emit('reorderQueue', { 
+        sessionId, 
+        queueId: songQueue[startIndex].queueId, 
+        newIndex: endIndex 
+      });
+    }
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    
+    if (active.id !== over.id) {
+      const oldIndex = songQueue.findIndex(song => song.queueId === active.id);
+      const newIndex = songQueue.findIndex(song => song.queueId === over.id);
+      reorderQueue(oldIndex, newIndex);
     }
   };
 
@@ -247,18 +218,6 @@ function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-
-    if (active.id !== over.id) {
-      const oldIndex = songQueue.findIndex((song) => song.id === active.id);
-      const newIndex = songQueue.findIndex((song) => song.id === over.id);
-      
-      console.log('Reordering queue:', { oldIndex, newIndex });
-      reorderQueue(oldIndex, newIndex);
-    }
-  };
 
   return (
     <div className="h-screen flex">
@@ -326,15 +285,29 @@ function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
           {/* YouTube Player */}
           <div className="absolute inset-0">
             <div className="w-full h-full">
-              {currentVideoId && (
-                <YouTubePlayer
-                  videoId={currentVideoId}
-                  isPlaying={isPlaying}
-                  volume={volume}
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  onEnd={playNext}
+              {currentSong ? (
+                <YouTube
+                  videoId={currentSong.videoId}
+                  opts={{
+                    height: '100%',
+                    width: '100%',
+                    playerVars: {
+                      autoplay: 1,
+                      controls: 0,
+                      disablekb: 1,
+                      fs: 0,
+                      modestbranding: 1,
+                      rel: 0
+                    },
+                  }}
+                  onReady={onPlayerReady}
+                  onStateChange={onPlayerStateChange}
+                  className="absolute inset-0"
                 />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white text-lg">
+                  Nenhuma música tocando
+                </div>
               )}
             </div>
           </div>
@@ -348,7 +321,7 @@ function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
                 {songQueue.length}
               </span>
               <span className="font-medium">Song Queue</span>
-              {isHost && (
+              {localStorage.getItem('isHost') === 'true' && (
                 <span className="text-gray-600 text-sm ml-4">Session ID: {sessionId}</span>
               )}
             </div>
@@ -361,17 +334,17 @@ function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={songQueue.map(song => song.id)}
+                items={songQueue.map(song => song.queueId)}
                 strategy={horizontalListSortingStrategy}
               >
                 <div className="inline-flex gap-4 pb-4 pr-4">
                   {songQueue.map((song, index) => (
                     <SortableItem
-                      key={song.id}
+                      key={song.queueId}
                       song={song}
                       index={index}
-                      isHost={isHost}
-                      playNext={playNext}
+                      isHost={localStorage.getItem('isHost') === 'true'}
+                      playNext={() => playNext(index)}
                       removeFromQueue={() => removeFromQueue(index)}
                     />
                   ))}
