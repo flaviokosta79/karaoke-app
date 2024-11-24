@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import KaraokePlayer from '../components/session/KaraokePlayer';
 import { config } from '../config';
+import { toast } from 'react-toastify';
 
 function Session() {
   const { sessionId } = useParams();
@@ -13,6 +14,7 @@ function Session() {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [participants, setParticipants] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -44,50 +46,42 @@ function Session() {
 
         if (!mounted) return;
         setSocket(newSocket);
+        setIsHost(isHost);
         
         // Configurar handlers de eventos
         newSocket.on('connect', () => {
           console.log('Socket connected successfully');
           if (!mounted) return;
-          
-          const userData = {
-            id: userId,
-            name: userName,
-            isHost: isHost,
-            color: userColor ? JSON.parse(userColor) : null
-          };
+          setConnected(true);
+          setConnecting(false);
 
-          console.log('Joining session with user data:', userData);
+          // Enviar dados do usuário ao conectar
           newSocket.emit('joinSession', {
             sessionId,
-            user: userData
+            userId,
+            userName,
+            isHost,
+            userColor: `bg-${userColor}`
           });
         });
 
-        newSocket.on('connect_error', (error) => {
-          console.error('Socket connection error:', error);
+        // Novo evento para atualização de participantes
+        newSocket.on('participantsUpdate', (updatedParticipants) => {
           if (!mounted) return;
-          setError('Erro ao conectar ao servidor. Por favor, tente novamente.');
-          setConnecting(false);
-        });
-
-        newSocket.on('sessionState', (state) => {
-          console.log('Received session state:', state);
-          if (!mounted) return;
-          setIsHost(state.isHost);
-          setCurrentSong(state.currentSong);
-          setConnected(true);
-          setConnecting(false);
-        });
-
-        newSocket.on('error', (err) => {
-          console.error('Socket error:', err);
-          if (!mounted) return;
-          setError(err.message);
-          setConnecting(false);
-          if (err.message === 'Session not found') {
-            setTimeout(() => navigate('/'), 2000);
+          console.log('Participants update:', updatedParticipants);
+          setParticipants(updatedParticipants);
+          
+          // Encontrar o último participante que entrou
+          const lastParticipant = updatedParticipants[updatedParticipants.length - 1];
+          if (lastParticipant && lastParticipant.userId !== userId) {
+            toast.info(`${lastParticipant.userName} entrou na sessão!`);
           }
+        });
+
+        newSocket.on('songUpdate', (song) => {
+          if (!mounted) return;
+          console.log('Song update:', song);
+          setCurrentSong(song);
         });
 
         newSocket.on('disconnect', () => {
@@ -97,8 +91,15 @@ function Session() {
           setConnecting(true);
         });
 
-      } catch (error) {
-        console.error('Error in connectToSession:', error);
+        newSocket.on('error', (error) => {
+          console.error('Socket error:', error);
+          if (!mounted) return;
+          setError('Erro de conexão');
+          setConnecting(false);
+        });
+
+      } catch (err) {
+        console.error('Error connecting to session:', err);
         if (mounted) {
           setError('Erro ao conectar à sessão');
           setConnecting(false);
@@ -111,7 +112,6 @@ function Session() {
     return () => {
       mounted = false;
       if (socket) {
-        console.log('Cleaning up socket connection');
         socket.disconnect();
       }
     };
@@ -119,38 +119,70 @@ function Session() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <div className="text-red-600 mb-4">Erro: {error}</div>
-          <a href="/" className="text-blue-600 hover:text-blue-800">
-            Voltar para o Início
-          </a>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-red-500 text-xl">{error}</div>
       </div>
     );
   }
 
-  if (connecting || !connected) {
+  if (connecting) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <div className="text-gray-600">
-            {connecting ? 'Conectando à sessão...' : 'Reconectando...'}
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-gray-600">Conectando à sessão...</div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <KaraokePlayer
-        sessionId={sessionId}
-        isHost={isHost}
-        song={currentSong}
-        socket={socket}
-      />
+      {isHost ? (
+        <KaraokePlayer
+          socket={socket}
+          sessionId={sessionId}
+          isHost={isHost}
+          currentSong={currentSong}
+        />
+      ) : (
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-bold mb-4">Sessão de Karaokê</h2>
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2">Participantes Online:</h3>
+              <div className="space-y-2">
+                {participants.map((participant) => (
+                  <div 
+                    key={participant.userId}
+                    className="flex items-center space-x-2 p-2 bg-gray-50 rounded"
+                  >
+                    <span 
+                      className={`w-3 h-3 rounded-full ${participant.userColor}`}
+                    />
+                    <span>{participant.userName}</span>
+                    {participant.isHost && (
+                      <span className="text-sm text-gray-500">(Host)</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {currentSong && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-2">Música Atual:</h3>
+                <div className="p-3 bg-gray-50 rounded">
+                  <p className="font-medium">{currentSong.title}</p>
+                  <p className="text-sm text-gray-600">{currentSong.artist}</p>
+                </div>
+              </div>
+            )}
+            <div className="bg-blue-50 p-4 rounded">
+              <p className="text-blue-700">
+                Aguarde o host iniciar as músicas. Você pode ver a lista de participantes
+                e acompanhar a sessão em tempo real.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

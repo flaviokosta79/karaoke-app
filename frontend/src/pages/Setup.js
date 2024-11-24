@@ -21,16 +21,17 @@ function Setup() {
       return;
     }
 
-    // Se não for host, salvar dados do usuário
-    if (!sessionId) {
-      const userId = Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('userId', userId);
-      localStorage.setItem('userName', name);
-      localStorage.setItem('isHost', 'false');
-    }
-
-    // Salvar cor selecionada
-    localStorage.setItem('userColor', JSON.stringify(selectedColor));
+    // Gerar ID único para o usuário
+    const userId = Math.random().toString(36).substr(2, 9);
+    
+    // Salvar dados do usuário
+    localStorage.setItem('userId', userId);
+    localStorage.setItem('userName', name.trim());
+    localStorage.setItem('isHost', sessionId ? 'true' : 'false');
+    
+    // Salvar a cor no formato correto (ex: "red-500" em vez de "bg-red-500")
+    const colorValue = selectedColor.bg.replace('bg-', '');
+    localStorage.setItem('userColor', colorValue);
 
     // Navegar para a sessão
     navigate(`/session/${joinSessionId}`);
@@ -49,20 +50,19 @@ function Setup() {
           <p className="text-gray-600">
             {sessionId 
               ? 'Configure sua nova sessão de karaokê'
-              : 'Insira seu nome e o ID da sessão para entrar'
-            }
+              : 'Entre em uma sessão existente'}
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-md">
+          <div className="bg-red-50 text-red-500 p-3 rounded-md text-center">
             {error}
           </div>
         )}
 
         <div className="space-y-6">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
               Seu Nome
             </label>
             <input
@@ -70,13 +70,29 @@ function Setup() {
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="Digite seu nome"
             />
           </div>
 
+          {!sessionId && (
+            <div>
+              <label htmlFor="sessionId" className="block text-sm font-medium text-gray-700">
+                ID da Sessão
+              </label>
+              <input
+                type="text"
+                id="sessionId"
+                value={joinSessionId}
+                onChange={(e) => setJoinSessionId(e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Digite o ID da sessão"
+              />
+            </div>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Escolha sua Cor
             </label>
             <div className="grid grid-cols-4 gap-4">
@@ -85,32 +101,16 @@ function Setup() {
                   key={color.bg}
                   color={color}
                   selected={selectedColor}
-                  onClick={setSelectedColor}
+                  onClick={() => setSelectedColor(color)}
                   initials={initials}
                 />
               ))}
             </div>
           </div>
 
-          {!sessionId && (
-            <div>
-              <label htmlFor="sessionId" className="block text-sm font-medium text-gray-700 mb-2">
-                ID da Sessão
-              </label>
-              <input
-                type="text"
-                id="sessionId"
-                value={joinSessionId}
-                onChange={(e) => setJoinSessionId(e.target.value)}
-                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Digite o ID da sessão"
-              />
-            </div>
-          )}
-
           <button
             onClick={handleJoin}
-            className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             {sessionId ? 'Iniciar Sessão' : 'Entrar na Sessão'}
           </button>

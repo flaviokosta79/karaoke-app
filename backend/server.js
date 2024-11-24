@@ -8,66 +8,85 @@ const youtubeService = require('./services/youtubeService');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
 
+// Configuração do CORS
 app.use(cors({
   origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
   methods: ["GET", "POST"],
   credentials: true
 }));
 
-app.use(express.json());
-
-// Rota de teste para verificar se o servidor está rodando
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+// Configuração do Socket.IO
+const io = socketIo(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
+
+app.use(express.json());
 
 // Armazenamento em memória das sessões
 const sessions = new Map();
 
+// Rota de teste para verificar se o servidor está rodando
+app.get('/api/health', (req, res) => {
+  console.log('Health check endpoint called');
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Função para gerar ID numérico de 4 dígitos
 function generateSessionId() {
-  const min = 1000;
-  const max = 9999;
   let sessionId;
   do {
-    sessionId = Math.floor(Math.random() * (max - min + 1)) + min;
-  } while (sessions.has(sessionId.toString()));
-  return sessionId.toString();
+    sessionId = Math.floor(1000 + Math.random() * 9000).toString();
+  } while (sessions.has(sessionId));
+  return sessionId;
 }
 
 // Rotas da API
 app.post('/api/sessions', async (req, res) => {
   try {
+    console.log('Criando nova sessão...');
     const sessionId = generateSessionId();
+    console.log('ID da sessão gerado:', sessionId);
     
     // Criar nova sessão
-    sessions.set(sessionId, {
+    const session = {
       id: sessionId,
       queue: [],
       users: new Map(),
+      participants: [],
       currentSong: null,
       isPlaying: false
-    });
+    };
+    
+    sessions.set(sessionId, session);
+    console.log('Sessão criada na memória');
 
     // Gerar QR Code
-    const sessionUrl = `${req.protocol}://${req.get('host')}/session/${sessionId}`;
+    const sessionUrl = `http://localhost:3000/session/${sessionId}`;
+    console.log('URL da sessão:', sessionUrl);
+    
     const qrCode = await QRCode.toDataURL(sessionUrl);
+    console.log('QR Code gerado');
 
-    res.json({
+    const response = {
       sessionId,
       qrCode,
       url: sessionUrl
-    });
+    };
+    
+    console.log('Enviando resposta:', response);
+    res.json(response);
+    
   } catch (error) {
     console.error('Erro ao criar sessão:', error);
-    res.status(500).json({ error: 'Erro ao criar sessão' });
+    res.status(500).json({ 
+      error: 'Erro ao criar sessão',
+      details: error.message 
+    });
   }
 });
 
@@ -94,40 +113,55 @@ app.get('/api/playlist', async (req, res) => {
 let queueIdCounter = 0;
 
 io.on('connection', (socket) => {
-  console.log('Novo cliente conectado:', socket.id);
+  console.log('Novo cliente conectado');
+  let userSession = null;
+  let userData = null;
 
-  socket.on('joinSession', ({ sessionId, user }) => {
-    console.log(`Tentando entrar na sessão ${sessionId} com usuário:`, user);
-    console.log('Sessões disponíveis:', Array.from(sessions.keys()));
+  socket.on('joinSession', ({ sessionId, userId, userName, isHost, userColor }) => {
+    console.log(`Usuário ${userName} tentando entrar na sessão ${sessionId}`);
     
     const session = sessions.get(sessionId);
+    if (!session) {
+      socket.emit('error', { message: 'Sessão não encontrada' });
+      return;
+    }
+
+    // Salvar dados do usuário
+    userData = { userId, userName, isHost, userColor };
+    userSession = session;
     
-    if (session) {
-      console.log(`Sessão ${sessionId} encontrada`);
-      session.users.set(socket.id, user);
-      socket.join(sessionId);
+    // Adicionar usuário à lista de participantes da sessão
+    if (!session.participants.find(p => p.userId === userId)) {
+      session.participants.push(userData);
+    }
+
+    // Entrar na sala Socket.IO da sessão
+    socket.join(sessionId);
+    
+    // Enviar lista atualizada de participantes para todos na sessão
+    io.to(sessionId).emit('participantsUpdate', session.participants);
+
+    // Se houver uma música tocando, enviar para o novo participante
+    if (session.currentSong) {
+      socket.emit('songUpdate', session.currentSong);
+    }
+    
+    console.log(`Usuário ${userName} entrou na sessão ${sessionId}`);
+    console.log('Participantes atuais:', session.participants);
+  });
+
+  socket.on('disconnect', () => {
+    if (userSession && userData) {
+      // Remover usuário da lista de participantes
+      userSession.participants = userSession.participants.filter(
+        p => p.userId !== userData.userId
+      );
       
-      // Enviar estado atual da sessão
-      const sessionState = {
-        isHost: user.isHost,
-        currentSong: session.currentSong,
-        queue: session.queue,
-        participants: Array.from(session.users.values()).length
-      };
+      // Enviar lista atualizada de participantes
+      io.to(userSession.id).emit('participantsUpdate', userSession.participants);
       
-      console.log(`Enviando estado da sessão para ${socket.id}:`, sessionState);
-      socket.emit('sessionState', sessionState);
-      
-      // Notificar outros participantes
-      io.to(sessionId).emit('participant-joined', { 
-        participantCount: session.users.size,
-        userName: user.name
-      });
-      
-      console.log(`Usuário ${user.name} entrou na sessão ${sessionId} com sucesso`);
-    } else {
-      console.log(`Sessão ${sessionId} não encontrada`);
-      socket.emit('error', { message: 'Session not found' });
+      console.log(`Usuário ${userData.userName} saiu da sessão ${userSession.id}`);
+      console.log('Participantes atuais:', userSession.participants);
     }
   });
 
@@ -266,29 +300,13 @@ io.on('connection', (socket) => {
       io.to(sessionId).emit('queueUpdate', session.queue);
     }
   });
-
-  socket.on('disconnect', () => {
-    console.log('Cliente desconectado:', socket.id);
-    sessions.forEach((session, sessionId) => {
-      if (session.users.has(socket.id)) {
-        session.users.delete(socket.id);
-        console.log(`Participante ${socket.id} removido da sessão ${sessionId}`);
-        
-        if (session.users.size === 0) {
-          sessions.delete(sessionId);
-          console.log(`Sessão ${sessionId} removida por falta de participantes`);
-        } else {
-          io.to(sessionId).emit('participant-left', { 
-            participantCount: session.users.size 
-          });
-          console.log(`Notificação de saída enviada para sessão ${sessionId}`);
-        }
-      }
-    });
-  });
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
+  console.log('Configurações CORS:', {
+    origins: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    methods: ["GET", "POST"]
+  });
 });
