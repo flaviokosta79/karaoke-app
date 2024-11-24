@@ -1,338 +1,157 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import {
-  Grid,
-  Box,
-  Typography,
-  Paper,
-  TextField,
-  Alert,
-  useTheme,
-  useMediaQuery,
-} from '@mui/material';
+import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { QRCodeCanvas } from 'qrcode.react';
 import KaraokePlayer from '../components/session/KaraokePlayer';
-import ParticipantsList from '../components/session/ParticipantsList';
-import SongQueue from '../components/session/SongQueue';
-import SongList from '../components/SongList';
 import { config } from '../config';
 
 function Session() {
   const { sessionId } = useParams();
-  const [session, setSession] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [error, setError] = useState('');
-  const [socket, setSocket] = useState(null);
-  const [currentSong, setCurrentSong] = useState(null);
-  const [songQueue, setSongQueue] = useState([]);
+  const navigate = useNavigate();
   const [isHost, setIsHost] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const sessionUrl = `${window.location.origin}/setup/${sessionId}`;
+  const [currentSong, setCurrentSong] = useState(null);
+  const [error, setError] = useState(null);
+  const [socket, setSocket] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(true);
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    if (!userData) {
-      setError('User data not found');
-      return;
-    }
-
-    setIsHost(userData.isHost);
-    setCurrentUser(userData.name);
-
-    // Connect to Socket.IO
-    const newSocket = io(config.backendUrl);
-    setSocket(newSocket);
+    let mounted = true;
     
-    // Join session
-    console.log('Joining session with user data:', userData);
-    newSocket.emit('joinSession', {
-      sessionId,
-      user: userData,
-    });
+    const connectToSession = async () => {
+      try {
+        // Verificar se temos os dados do usuário
+        const userId = localStorage.getItem('userId');
+        const userName = localStorage.getItem('userName');
+        const isHost = localStorage.getItem('isHost') === 'true';
+        const userColor = localStorage.getItem('userColor');
 
-    // Socket event listeners
-    newSocket.on('userList', (updatedUsers) => {
-      console.log('Users updated:', updatedUsers);
-      setUsers(updatedUsers);
-    });
-
-    newSocket.on('error', (error) => {
-      console.error('Socket error:', error);
-      setError(error.message);
-    });
-
-    newSocket.on('songQueue', (updatedQueue) => {
-      console.log('Song queue updated:', updatedQueue);
-      // Garantir que cada música tenha um ID string
-      const queueWithStringIds = (updatedQueue || []).map(song => ({
-        ...song,
-        id: song.id.toString()
-      }));
-      setSongQueue(queueWithStringIds);
-    });
-
-    newSocket.on('currentSong', (song) => {
-      console.log('Current song updated:', song);
-      setCurrentSong(song);
-    });
-
-    newSocket.on('queueUpdated', (updatedQueue) => {
-      console.log('Received queue update:', updatedQueue);
-      setSongQueue(updatedQueue);
-    });
-
-    // Fetch initial session data
-    fetch(`${config.backendUrl}/api/sessions/${sessionId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setSession(data);
-          setUsers(data.users || []);
-          // Garantir que cada música tenha um ID string
-          const queueWithStringIds = (data.songQueue || []).map(song => ({
-            ...song,
-            id: song.id.toString()
-          }));
-          setSongQueue(queueWithStringIds);
-          setCurrentSong(data.currentSong);
-        }
-      })
-      .catch((err) => {
-        console.error('Error fetching session:', err);
-        setError('Failed to fetch session data');
-      });
-
-    return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-      }
-    };
-  }, [sessionId]);
-
-  const handleAddToQueue = async (song) => {
-    if (!socket) {
-      console.error('Socket not connected');
-      return;
-    }
-    
-    try {
-      const songWithUser = {
-        ...song,
-        user: currentUser
-      };
-      
-      console.log('Adding song to queue:', songWithUser);
-      socket.emit('addToQueue', {
-        sessionId,
-        song: songWithUser
-      });
-    } catch (error) {
-      console.error('Error adding song to queue:', error);
-      setError('Failed to add song to queue');
-    }
-  };
-
-  const handleRemoveFromQueue = (index) => {
-    if (!socket) {
-      console.error('Socket not connected');
-      return;
-    }
-
-    try {
-      const song = songQueue[index];
-      if (isHost || song.user === currentUser) {
-        console.log('Removing song at index:', index);
-        socket.emit('removeFromQueue', {
-          sessionId,
-          index
-        });
-      } else {
-        console.error('User does not have permission to remove this song');
-      }
-    } catch (error) {
-      console.error('Error removing from queue:', error);
-      setError('Failed to remove song from queue');
-    }
-  };
-
-  const handleReorderQueue = (sourceIndex, destinationIndex) => {
-    if (!socket) {
-      console.error('Socket not connected');
-      return;
-    }
-
-    try {
-      const sourceMusic = songQueue[sourceIndex];
-
-      // Se não for host, verifica se pode mover
-      if (!isHost) {
-        // Verifica se a música é do usuário atual
-        if (sourceMusic.user !== currentUser) {
-          console.error('User does not have permission to move this song');
+        if (!userId || !userName) {
+          console.error('Missing user data');
+          if (mounted) {
+            setError('Dados do usuário não encontrados');
+            setTimeout(() => navigate('/'), 2000);
+          }
           return;
         }
 
-        // Verifica se está tentando mover para uma posição adjacente
-        const isMovingUp = destinationIndex < sourceIndex;
-        const isMovingDown = destinationIndex > sourceIndex;
+        console.log('Connecting to server at:', config.backendUrl);
+        const newSocket = io(config.backendUrl, {
+          transports: ['websocket', 'polling'],
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 10000
+        });
 
-        if (isMovingUp) {
-          // Ao mover para cima, verifica se a música acima é do mesmo usuário
-          if (sourceIndex > 0 && songQueue[sourceIndex - 1].user !== currentUser) {
-            console.error('Cannot move song past another user\'s song');
-            return;
+        if (!mounted) return;
+        setSocket(newSocket);
+        
+        // Configurar handlers de eventos
+        newSocket.on('connect', () => {
+          console.log('Socket connected successfully');
+          if (!mounted) return;
+          
+          const userData = {
+            id: userId,
+            name: userName,
+            isHost: isHost,
+            color: userColor ? JSON.parse(userColor) : null
+          };
+
+          console.log('Joining session with user data:', userData);
+          newSocket.emit('joinSession', {
+            sessionId,
+            user: userData
+          });
+        });
+
+        newSocket.on('connect_error', (error) => {
+          console.error('Socket connection error:', error);
+          if (!mounted) return;
+          setError('Erro ao conectar ao servidor. Por favor, tente novamente.');
+          setConnecting(false);
+        });
+
+        newSocket.on('sessionState', (state) => {
+          console.log('Received session state:', state);
+          if (!mounted) return;
+          setIsHost(state.isHost);
+          setCurrentSong(state.currentSong);
+          setConnected(true);
+          setConnecting(false);
+        });
+
+        newSocket.on('error', (err) => {
+          console.error('Socket error:', err);
+          if (!mounted) return;
+          setError(err.message);
+          setConnecting(false);
+          if (err.message === 'Session not found') {
+            setTimeout(() => navigate('/'), 2000);
           }
-        } else if (isMovingDown) {
-          // Ao mover para baixo, verifica se a música abaixo é do mesmo usuário
-          if (sourceIndex < songQueue.length - 1 && songQueue[sourceIndex + 1].user !== currentUser) {
-            console.error('Cannot move song past another user\'s song');
-            return;
-          }
+        });
+
+        newSocket.on('disconnect', () => {
+          console.log('Socket disconnected');
+          if (!mounted) return;
+          setConnected(false);
+          setConnecting(true);
+        });
+
+      } catch (error) {
+        console.error('Error in connectToSession:', error);
+        if (mounted) {
+          setError('Erro ao conectar à sessão');
+          setConnecting(false);
         }
       }
+    };
 
-      // Atualiza o estado local imediatamente
-      const newQueue = Array.from(songQueue);
-      const [removed] = newQueue.splice(sourceIndex, 1);
-      newQueue.splice(destinationIndex, 0, removed);
-      setSongQueue(newQueue);
+    connectToSession();
 
-      // Envia a atualização para o servidor
-      console.log('Reordering queue from index', sourceIndex, 'to', destinationIndex);
-      socket.emit('reorderQueue', {
-        sessionId,
-        sourceIndex,
-        destinationIndex
-      });
-    } catch (error) {
-      console.error('Error reordering queue:', error);
-      setError('Failed to reorder song queue');
-      // Em caso de erro, reverte para a ordem original
-      socket.emit('requestQueueUpdate', { sessionId });
-    }
-  };
-
-  const handlePlaySong = async (song) => {
-    if (!socket || !isHost) {
-      console.error('Cannot play song: socket not connected or not host');
-      return;
-    }
-    
-    try {
-      console.log('Playing song:', song);
-      socket.emit('playSong', {
-        sessionId,
-        song
-      });
-    } catch (error) {
-      console.error('Error playing song:', error);
-      setError('Failed to play song');
-    }
-  };
+    return () => {
+      mounted = false;
+      if (socket) {
+        console.log('Cleaning up socket connection');
+        socket.disconnect();
+      }
+    };
+  }, [sessionId, navigate]);
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <div className="text-red-600 mb-4">Erro: {error}</div>
+          <a href="/" className="text-blue-600 hover:text-blue-800">
+            Voltar para o Início
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (connecting || !connected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="text-gray-600">
+            {connecting ? 'Conectando à sessão...' : 'Reconectando...'}
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Grid container spacing={2} sx={{ height: '100vh', p: 2 }}>
-      {/* Player Area */}
-      <Grid item xs={12} md={8}>
-        {isHost ? (
-          <KaraokePlayer
-            song={currentSong}
-            isHost={isHost}
-            sessionId={sessionId}
-          />
-        ) : currentSong && (
-          <Box sx={{ 
-            height: 100, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            bgcolor: 'background.paper',
-            borderRadius: 1,
-            mb: 2
-          }}>
-            <Typography variant="h6" color="text.secondary">
-              Tocando: {currentSong.title} - {currentSong.artist}
-            </Typography>
-          </Box>
-        )}
-
-        {/* Search Bar */}
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Buscar músicas..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{ mb: 2 }}
-        />
-
-        {/* Main Content Area */}
-        <Grid container spacing={2}>
-          {/* Song Queue */}
-          <Grid item xs={12} md={6}>
-            <Box sx={{ 
-              height: isMobile ? '400px' : 'calc(100vh - 300px)',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              <SongQueue
-                songs={songQueue}
-                onRemove={handleRemoveFromQueue}
-                onReorder={handleReorderQueue}
-                onPlay={handlePlaySong}
-                isHost={isHost}
-                currentUser={currentUser}
-              />
-            </Box>
-          </Grid>
-
-          {/* Song List */}
-          <Grid item xs={12} md={6}>
-            <Box sx={{ 
-              height: isMobile ? '400px' : 'calc(100vh - 300px)',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              <SongList
-                onAddToQueue={handleAddToQueue}
-                onPlay={handlePlaySong}
-                searchTerm={searchTerm}
-                isHost={isHost}
-              />
-            </Box>
-          </Grid>
-        </Grid>
-      </Grid>
-
-      {/* Right Column - Participants */}
-      <Grid item xs={12} md={4}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
-          {/* Participants List */}
-          <Paper sx={{ p: 2, flex: 1 }}>
-            <ParticipantsList
-              users={users}
-              currentUser={currentUser}
-              isHost={isHost}
-            />
-          </Paper>
-        </Box>
-      </Grid>
-    </Grid>
+    <div className="min-h-screen bg-gray-100">
+      <KaraokePlayer
+        sessionId={sessionId}
+        isHost={isHost}
+        song={currentSong}
+        socket={socket}
+      />
+    </div>
   );
 }
 

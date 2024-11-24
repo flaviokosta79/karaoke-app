@@ -1,90 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  Container,
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Grid,
-  Avatar,
-  CircularProgress,
-} from '@mui/material';
+import { Loader2 } from 'lucide-react';
 import { config } from '../config';
 
-const avatarOptions = [
-  { color: '#1976d2', image: '/avatars/1.png' }, // Azul
-  { color: '#2e7d32', image: '/avatars/2.png' }, // Verde
-  { color: '#d32f2f', image: '/avatars/3.png' }, // Vermelho
-  { color: '#ed6c02', image: '/avatars/4.png' }, // Laranja
-  { color: '#9c27b0', image: '/avatars/5.png' }, // Roxo
-  { color: '#0288d1', image: '/avatars/6.png' }, // Azul claro
-  { color: '#689f38', image: '/avatars/7.png' }, // Verde claro
-  { color: '#7b1fa2', image: '/avatars/8.png' }, // Roxo escuro
+const avatarColors = [
+  'bg-blue-500',
+  'bg-green-500',
+  'bg-red-500',
+  'bg-yellow-500',
+  'bg-purple-500',
+  'bg-pink-500',
+  'bg-indigo-500',
+  'bg-teal-500',
 ];
 
 function UserSetup() {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams();
   const [name, setName] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(avatarColors[0]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isHost, setIsHost] = useState(false);
-  const [sessionId, setSessionId] = useState('');
 
   useEffect(() => {
-    const setup = async () => {
-      // If we have a sessionId in URL, verify it exists
-      if (urlSessionId) {
-        setIsLoading(true);
-        try {
-          const response = await fetch(`${config.backendUrl}/api/sessions/${urlSessionId}`);
-          if (!response.ok) {
-            throw new Error('Session not found');
-          }
-          setSessionId(urlSessionId);
-          setIsHost(false);
-        } catch (error) {
-          console.error('Error verifying session:', error);
-          setError('Invalid session. Please try again.');
-          navigate('/');
-          return;
-        } finally {
-          setIsLoading(false);
+    // Check if we have a valid session ID
+    if (!urlSessionId) {
+      navigate('/');
+      return;
+    }
+
+    const verifySession = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${config.backendUrl}/api/sessions/${urlSessionId}`);
+        if (!response.ok) {
+          throw new Error('Session not found');
         }
-      } else {
-        // No sessionId in URL means we're creating a new session
-        const tempSessionId = localStorage.getItem('tempSessionId');
-        if (!tempSessionId) {
-          // No temporary session ID means we shouldn't be here
-          navigate('/');
-          return;
-        }
-        setSessionId(tempSessionId);
-        setIsHost(true);
+      } catch (error) {
+        console.error('Error verifying session:', error);
+        setError('Invalid session. Please try again.');
+        navigate('/');
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    setup();
+    verifySession();
   }, [urlSessionId, navigate]);
 
-  const generateUserId = () => {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36);
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
     if (!name.trim()) {
       setError('Please enter your name');
-      return;
-    }
-    if (!selectedAvatar) {
-      setError('Please select an avatar');
-      return;
-    }
-    if (!sessionId) {
-      setError('Session ID not found');
-      navigate('/');
       return;
     }
 
@@ -92,108 +60,104 @@ function UserSetup() {
     setError('');
 
     try {
-      // Store user data in localStorage for persistence
+      // Store user data
       const userData = {
-        id: generateUserId(),
         name: name.trim(),
-        avatar: selectedAvatar,
-        isHost,
+        color: selectedColor,
+        isHost: false,
       };
       localStorage.setItem('userData', JSON.stringify(userData));
 
       // Navigate to session
-      navigate(`/session/${sessionId}`);
+      navigate(`/session/${urlSessionId}`);
     } catch (error) {
       console.error('Error joining session:', error);
       setError('Failed to join session. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
 
   if (isLoading) {
     return (
-      <Container maxWidth="sm">
-        <Box
-          sx={{
-            mt: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <CircularProgress />
-          <Typography>Loading session...</Typography>
-        </Box>
-      </Container>
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="animate-spin h-5 w-5" />
+          <span>Loading...</span>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        {isLoading ? (
-          <CircularProgress />
-        ) : (
-          <>
-            <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-              {isHost ? 'Create Your Profile' : 'Join Session'}
-            </Typography>
-            <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                id="name"
-                label="Your Name"
-                name="name"
-                autoComplete="name"
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                error={!!error}
-                helperText={error}
-              />
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                Choose your avatar:
-              </Typography>
-              <Grid container spacing={2}>
-                {avatarOptions.map((avatar) => (
-                  <Grid item key={avatar.image} xs={3}>
-                    <Avatar
-                      src={avatar.image}
-                      alt="Avatar option"
-                      sx={{
-                        width: 56,
-                        height: 56,
-                        cursor: 'pointer',
-                        border: selectedAvatar === avatar.image ? 3 : 0,
-                        borderColor: avatar.color,
-                        bgcolor: avatar.color,
-                        '&:hover': {
-                          opacity: 0.8,
-                        },
-                      }}
-                      onClick={() => setSelectedAvatar(avatar.image)}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-              <Button
-                fullWidth
-                variant="contained"
-                sx={{ mt: 3, mb: 2 }}
-                onClick={handleSubmit}
-                disabled={isLoading}
-              >
-                {isHost ? 'Create Session' : 'Join Session'}
-              </Button>
-            </Box>
-          </>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-lg">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900">
+            Join Session
+          </h2>
+          <p className="mt-2 text-gray-600">
+            Enter your name and choose an avatar color
+          </p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 text-red-600 p-4 rounded-md">
+            {error}
+          </div>
         )}
-      </Box>
-    </Container>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              Your Name
+            </label>
+            <input
+              type="text"
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter your name"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Choose Your Color
+            </label>
+            <div className="grid grid-cols-4 gap-4">
+              {avatarColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`w-12 h-12 rounded-full ${color} ${
+                    selectedColor === color
+                      ? 'ring-4 ring-blue-500 ring-offset-2'
+                      : ''
+                  }`}
+                  onClick={() => setSelectedColor(color)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
+                Joining...
+              </>
+            ) : (
+              'Join Session'
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 

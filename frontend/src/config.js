@@ -8,12 +8,12 @@ const getBackendUrl = () => {
   const isLocalNetwork = !window.location.hostname.includes('localhost');
   if (isLocalNetwork) {
     // Use the same hostname as the frontend
-    return `http://${window.location.hostname}:5002`;
+    return `http://${window.location.hostname}:5000`;
   }
   
-  return 'http://localhost:5002';
+  return 'http://localhost:5000';
 };
 
 export const config = {
-  backendUrl: getBackendUrl(),
+  backendUrl: getBackendUrl()
 };

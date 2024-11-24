@@ -1,40 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Container,
-  Box,
-  Button,
-  Typography,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  CircularProgress,
-  Snackbar,
-  Alert,
-} from '@mui/material';
-import QrReader from 'react-qr-scanner';
 import { config } from '../config';
+import { Loader2 } from 'lucide-react';
 
 function Home() {
   const navigate = useNavigate();
-  const [openQrScanner, setOpenQrScanner] = useState(false);
-  const [sessionId, setSessionId] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [error, setError] = useState('');
 
   // Clear any existing user data when landing on home page
   localStorage.removeItem('userData');
-
-  const showSnackbar = (message, severity = 'error') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
 
   const createSession = async () => {
     setIsLoading(true);
@@ -54,193 +29,74 @@ function Home() {
       }
 
       const data = await response.json();
+      console.log('Session created:', data);
+
+      // Gerar ID único para o usuário host
+      const userId = Math.random().toString(36).substr(2, 9);
       
-      if (!data.sessionId) {
-        throw new Error('Invalid response from server');
-      }
-      
-      // Store session ID temporarily
-      localStorage.setItem('tempSessionId', data.sessionId);
-      
-      // Navigate to user setup first
-      navigate('/setup');
-    } catch (error) {
-      console.error('Error creating session:', error);
-      const errorMessage = error.message || 'Failed to create session. Please try again.';
-      setError(errorMessage);
-      showSnackbar(errorMessage);
+      // Store user data
+      localStorage.setItem('userId', userId);
+      localStorage.setItem('userName', 'Host');
+      localStorage.setItem('isHost', 'true');
+
+      // Navigate to setup page with the new session ID
+      navigate(`/setup/${data.sessionId}`);
+    } catch (err) {
+      console.error('Error creating session:', err);
+      setError(err.message || 'Failed to create session');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const joinSession = async () => {
-    if (!sessionId.trim()) {
-      const errorMessage = 'Please enter a session ID';
-      setError(errorMessage);
-      showSnackbar(errorMessage);
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      // Verify session exists
-      const response = await fetch(`${config.backendUrl}/api/sessions/${sessionId}`);
-      if (!response.ok) {
-        throw new Error('Session not found');
-      }
-
-      // Navigate to user setup with session ID
-      navigate(`/setup/${sessionId}`);
-    } catch (error) {
-      console.error('Error joining session:', error);
-      const errorMessage = error.message || 'Failed to join session. Please try again.';
-      setError(errorMessage);
-      showSnackbar(errorMessage);
-      setIsLoading(false);
-    }
-  };
-
-  const handleQrScan = (data) => {
-    if (data) {
-      try {
-        // Extract session ID from QR code URL
-        const url = new URL(data.text);
-        const pathSegments = url.pathname.split('/');
-        const scannedSessionId = pathSegments[pathSegments.length - 1];
-        
-        setOpenQrScanner(false);
-        navigate(`/setup/${scannedSessionId}`);
-      } catch (error) {
-        console.error('Error parsing QR code:', error);
-        const errorMessage = 'Invalid QR code';
-        setError(errorMessage);
-        showSnackbar(errorMessage);
-      }
-    }
-  };
-
-  const handleQrError = (err) => {
-    console.error('QR Scanner error:', err);
-    const errorMessage = 'Failed to scan QR code';
-    setError(errorMessage);
-    showSnackbar(errorMessage);
+  const joinSession = () => {
+    navigate('/setup');
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box
-        sx={{
-          mt: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 4,
-        }}
-      >
-        <Typography variant="h3" component="h1" gutterBottom align="center">
-          Karaoke Party 🎤
-        </Typography>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-lg">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Karaoke Social
+          </h1>
+          <p className="text-gray-600">
+            Crie uma nova sessão ou junte-se a uma existente
+          </p>
+        </div>
 
-        <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Button
-            variant="contained"
-            size="large"
+        {error && (
+          <div className="bg-red-50 text-red-600 p-4 rounded-md mb-4">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <button
             onClick={createSession}
             disabled={isLoading}
-            sx={{ py: 2 }}
+            className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
             {isLoading ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <CircularProgress size={20} color="inherit" />
-                <span>Creating Session...</span>
-              </Box>
+              <>
+                <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
+                Criando sessão...
+              </>
             ) : (
-              'Create New Session'
+              'Criar Nova Sessão'
             )}
-          </Button>
+          </button>
 
-          <Typography variant="h6" align="center" sx={{ mt: 4, mb: 2 }}>
-            or join existing session
-          </Typography>
-
-          <TextField
-            fullWidth
-            label="Session ID"
-            value={sessionId}
-            onChange={(e) => setSessionId(e.target.value)}
-            error={!!error && !sessionId.trim()}
-            helperText={!sessionId.trim() && error}
-            disabled={isLoading}
-            sx={{ mb: 2 }}
-          />
-
-          <Button
-            variant="outlined"
-            size="large"
+          <button
             onClick={joinSession}
             disabled={isLoading}
-            sx={{ py: 2 }}
+            className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            {isLoading ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <CircularProgress size={20} color="inherit" />
-                <span>Joining Session...</span>
-              </Box>
-            ) : (
-              'Join Session'
-            )}
-          </Button>
-
-          <Button
-            variant="text"
-            onClick={() => setOpenQrScanner(true)}
-            disabled={isLoading}
-            sx={{ mt: 2 }}
-          >
-            Scan QR Code
-          </Button>
-        </Box>
-
-        <Dialog 
-          open={openQrScanner} 
-          onClose={() => setOpenQrScanner(false)}
-          fullWidth
-          maxWidth="sm"
-        >
-          <DialogTitle>Scan Session QR Code</DialogTitle>
-          <DialogContent>
-            <QrReader
-              delay={300}
-              onError={handleQrError}
-              onScan={handleQrScan}
-              style={{ width: '100%' }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenQrScanner(false)}>Cancel</Button>
-          </DialogActions>
-        </Dialog>
-
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert 
-            onClose={handleCloseSnackbar} 
-            severity={snackbar.severity}
-            variant="filled"
-            sx={{ width: '100%' }}
-          >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </Container>
+            Entrar em uma Sessão
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

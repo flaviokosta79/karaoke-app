@@ -1,18 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Box,
-  Button,
-} from '@mui/material';
-import {
-  Home as HomeIcon,
-  QueueMusic as QueueMusicIcon,
-  Settings as SettingsIcon,
-} from '@mui/icons-material';
+import { Home, Music, Settings } from 'lucide-react';
 
 function NavBar() {
   const navigate = useNavigate();
@@ -20,40 +8,50 @@ function NavBar() {
   const isSession = location.pathname.includes('/session');
 
   return (
-    <AppBar position="static" color="primary">
-      <Toolbar>
-        <IconButton
-          edge="start"
-          color="inherit"
-          aria-label="home"
-          onClick={() => navigate('/')}
-          sx={{ mr: 2 }}
-        >
-          <HomeIcon />
-        </IconButton>
+    <nav className="bg-gray-900 text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center space-x-2 hover:text-gray-300"
+            >
+              <Home className="h-6 w-6" />
+              <span className="font-bold text-xl">Karaoke Social</span>
+            </button>
+          </div>
 
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Karaoke Social
-        </Typography>
-
-        {isSession && (
-          <>
-            <IconButton color="inherit" aria-label="queue">
-              <QueueMusicIcon />
-            </IconButton>
-            <IconButton color="inherit" aria-label="settings">
-              <SettingsIcon />
-            </IconButton>
-          </>
-        )}
-
-        {!isSession && (
-          <Button color="inherit" onClick={() => navigate('/setup')}>
-            Entrar
-          </Button>
-        )}
-      </Toolbar>
-    </AppBar>
+          <div className="flex items-center space-x-4">
+            {isSession && (
+              <>
+                <button
+                  onClick={() => {/* Handle queue */}}
+                  className="flex items-center space-x-2 hover:text-gray-300"
+                >
+                  <Music className="h-6 w-6" />
+                  <span>Queue</span>
+                </button>
+                <button
+                  onClick={() => {/* Handle settings */}}
+                  className="flex items-center space-x-2 hover:text-gray-300"
+                >
+                  <Settings className="h-6 w-6" />
+                  <span>Settings</span>
+                </button>
+              </>
+            )}
+            {!isSession && (
+              <button
+                onClick={() => navigate('/setup')}
+                className="flex items-center space-x-2 hover:text-gray-300"
+              >
+                <span>Entrar</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 }
 

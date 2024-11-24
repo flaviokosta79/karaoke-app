@@ -1,348 +1,390 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Paper, Typography, Box, IconButton, useTheme, Slider, Stack } from '@mui/material';
-import { QRCodeCanvas } from 'qrcode.react';
-import FullscreenIcon from '@mui/icons-material/Fullscreen';
-import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import VolumeUpIcon from '@mui/icons-material/VolumeUp';
-import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import { ChevronLeft, MoreVertical, Play, SkipForward, Search, Star, Smartphone, Settings, X, GripVertical, Pause, Volume2 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { config } from '../../config';
 import io from 'socket.io-client';
+import YouTubePlayer from './YouTubePlayer';
 
-function KaraokePlayer({ song, isHost, sessionId }) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-  const [lyrics, setLyrics] = useState([]);
-  const [currentLyric, setCurrentLyric] = useState('');
-  const [nextLyric, setNextLyric] = useState('');
-  const socketRef = useRef();
-  
-  const theme = useTheme();
-  const playerRef = useRef(null);
-  const audioRef = useRef(null);
-  const progressInterval = useRef(null);
-  const sessionUrl = `${window.location.origin}/setup/${sessionId}`;
+function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: song.id });
 
-  // Inicializar socket
-  useEffect(() => {
-    if (isHost && sessionId) {
-      socketRef.current = io(config.backendUrl);
-      
-      return () => {
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-        }
-      };
-    }
-  }, [isHost, sessionId]);
-
-  // Carregar letras da música
-  useEffect(() => {
-    if (song?.id) {
-      fetch(`${config.backendUrl}/api/songs/${song.id}/lyrics`)
-        .then(res => res.json())
-        .then(data => {
-          setLyrics(data.lines || []);
-        })
-        .catch(error => {
-          console.error('Error loading lyrics:', error);
-        });
-    }
-  }, [song]);
-
-  // Configurar o áudio quando uma nova música é carregada
-  useEffect(() => {
-    if (song?.audioUrl) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-      const audioUrl = `${config.backendUrl}${song.audioUrl}`;
-      console.log('Loading audio from:', audioUrl);
-      
-      audioRef.current = new Audio(audioUrl);
-      audioRef.current.volume = volume;
-      
-      audioRef.current.addEventListener('loadedmetadata', () => {
-        console.log('Audio metadata loaded, duration:', audioRef.current.duration);
-        setDuration(audioRef.current.duration * 1000);
-        // Iniciar reprodução automaticamente
-        handlePlayPause();
-      });
-
-      audioRef.current.addEventListener('error', (e) => {
-        console.error('Error loading audio:', e);
-      });
-
-      audioRef.current.addEventListener('play', () => {
-        console.log('Audio started playing');
-        setIsPlaying(true);
-      });
-
-      audioRef.current.addEventListener('pause', () => {
-        console.log('Audio paused');
-        setIsPlaying(false);
-      });
-
-      audioRef.current.addEventListener('ended', () => {
-        console.log('Audio ended');
-        setIsPlaying(false);
-        clearInterval(progressInterval.current);
-        setCurrentTime(0);
-        // Emitir evento para o servidor para reproduzir a próxima música da fila
-        if (isHost && socketRef.current) {
-          console.log('Requesting next song...');
-          socketRef.current.emit('playNextSong', { sessionId });
-        }
-      });
-    }
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      if (progressInterval.current) {
-        clearInterval(progressInterval.current);
-      }
-    };
-  }, [song, volume, isHost, sessionId]);
-
-  // Atualizar volume
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
-
-  // Atualizar letras baseado no tempo
-  useEffect(() => {
-    if (!lyrics.length) return;
-
-    const currentLine = lyrics.find(
-      line => currentTime >= line.startTime && currentTime <= line.endTime
-    );
-    const nextLine = lyrics.find(
-      line => currentTime < line.startTime
-    );
-
-    setCurrentLyric(currentLine?.text || '');
-    setNextLyric(nextLine?.text || '');
-  }, [currentTime, lyrics]);
-
-  const startProgressInterval = () => {
-    if (progressInterval.current) {
-      clearInterval(progressInterval.current);
-    }
-
-    progressInterval.current = setInterval(() => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime * 1000);
-      }
-    }, 100);
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    width: '256px',
+    flexShrink: 0,
   };
 
-  // Função para reproduzir/pausar o áudio
-  const handlePlayPause = async () => {
-    if (!audioRef.current) {
-      console.error('Audio element not initialized');
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-white p-4 rounded-lg shadow-sm ${
+        isDragging ? 'shadow-lg ring-2 ring-pink-500 z-50' : ''
+      }`}
+    >
+      <div className="flex items-center">
+        {isHost && (
+          <div
+            {...attributes}
+            {...listeners}
+            className="mr-2 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="w-5 h-5" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="font-medium truncate">{song.title}</div>
+          <div className="text-sm text-gray-600 truncate">{song.artist}</div>
+        </div>
+        <div className="flex items-center gap-2 ml-2">
+          {isHost && (
+            <button
+              onClick={() => playNext()}
+              className="text-gray-400 hover:text-pink-600"
+            >
+              <Play className="w-5 h-5" />
+            </button>
+          )}
+          <button
+            onClick={() => removeFromQueue(index)}
+            className="text-gray-400 hover:text-red-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KaraokePlayer({ song: currentSong, isHost, sessionId }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [currentVideoId, setCurrentVideoId] = useState(null);
+  const [songQueue, setSongQueue] = useState([]);
+  const [songs, setSongs] = useState([
+    { id: 1, title: 'Numb', artist: 'Linkin Park', cover: 'https://via.placeholder.com/48', videoId: 'yUVapAM_BQI' },
+    { id: 2, title: 'Creep', artist: 'Radiohead', cover: 'https://via.placeholder.com/48', videoId: 'vZ1q0iwM9XQ' },
+    { id: 3, title: 'A Whole New World', artist: 'Aladdin', cover: 'https://via.placeholder.com/48', videoId: 'MklqiL3WN5U' },
+    { id: 4, title: 'A Thousand Years', artist: 'Christina Perri', cover: 'https://via.placeholder.com/48', videoId: '2YI9i9ftkyw' },
+    { id: 5, title: 'Here Without You', artist: '3 Doors Down', cover: 'https://via.placeholder.com/48', videoId: 'tMtn3QF537A' },
+    { id: 6, title: 'Help Me Make It Through the Night', artist: 'Sammi Smith', cover: 'https://via.placeholder.com/48', videoId: 'JoiyE7p1tpE' },
+    { id: 7, title: 'Green Green Grass of Home', artist: 'Tom Jones', cover: 'https://via.placeholder.com/48', videoId: 'f9B7Xkp3qdo' },
+    { id: 8, title: 'Girl on Fire', artist: 'Alicia Keys', cover: 'https://via.placeholder.com/48', videoId: 'EYXZJEMc4bc' },
+    { id: 9, title: "Don't Cry", artist: "Guns N' Roses", cover: 'https://via.placeholder.com/48', videoId: 'bUs3eMD-USk' },
+    { id: 10, title: 'Do You Want to Build a Snowman', artist: 'Frozen', cover: 'https://via.placeholder.com/48', videoId: 'un3-E5uy2MI' }
+  ]);
+
+  const playerRef = useRef(null);
+  const audioRef = useRef(null);
+  const socketRef = useRef();
+
+  useEffect(() => {
+    console.log('Initializing socket connection...');
+    console.log('Backend URL:', config.backendUrl);
+    console.log('Session ID:', sessionId);
+    
+    // Recuperar dados do usuário
+    const userId = localStorage.getItem('userId');
+    const userName = localStorage.getItem('userName');
+    const isHost = localStorage.getItem('isHost') === 'true';
+    const userColor = localStorage.getItem('userColor');
+
+    if (!userId || !userName) {
+      console.error('Missing user data');
       return;
     }
 
-    try {
-      if (isPlaying) {
-        console.log('Pausing audio');
-        audioRef.current.pause();
-        clearInterval(progressInterval.current);
-      } else {
-        console.log('Starting audio playback');
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-          startProgressInterval();
-        }
+    // Criar conexão do socket
+    socketRef.current = io(config.backendUrl, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+    
+    socketRef.current.on('connect', () => {
+      console.log('Socket connected successfully');
+      
+      // Enviar dados do usuário ao entrar na sessão
+      const userData = {
+        id: userId,
+        name: userName,
+        isHost: isHost,
+        color: userColor ? JSON.parse(userColor) : null
+      };
+
+      console.log('Joining session with data:', {
+        sessionId,
+        user: userData
+      });
+
+      socketRef.current.emit('joinSession', {
+        sessionId,
+        user: userData
+      });
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    socketRef.current.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+
+    // Ouvir atualizações da fila
+    socketRef.current.on('queueUpdate', (updatedQueue) => {
+      console.log('Queue updated:', updatedQueue);
+      setSongQueue(updatedQueue);
+    });
+
+    // Ouvir mudanças de música
+    socketRef.current.on('songChange', (song) => {
+      console.log('Song changed:', song);
+      if (song) {
+        setCurrentVideoId(song.videoId);
       }
-      setIsPlaying(!isPlaying);
-    } catch (error) {
-      console.error('Error playing/pausing audio:', error);
-    }
-  };
+    });
 
-  const handleVolumeChange = (event, newValue) => {
-    setVolume(newValue);
-  };
+    // Ouvir estado da sessão
+    socketRef.current.on('sessionState', (state) => {
+      console.log('Received session state:', state);
+      if (state.currentSong) {
+        setCurrentVideoId(state.currentSong.videoId);
+      }
+      if (state.queue) {
+        setSongQueue(state.queue);
+      }
+    });
 
-  const handleMuteToggle = () => {
-    setIsMuted(!isMuted);
-  };
-
-  const handleSeek = (event, newValue) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = newValue / 1000;
-      setCurrentTime(newValue);
-    }
-  };
-
-  const handleFullscreenToggle = () => {
-    if (!document.fullscreenElement) {
-      playerRef.current.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
-
-  // Listen for fullscreen changes
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      console.log('Cleaning up socket connection');
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
     };
-  }, []);
+  }, [sessionId]);
+
+  const addToQueue = (song) => {
+    console.log('Adding song to queue:', song);
+    console.log('Session ID:', sessionId);
+    console.log('Socket connected:', socketRef.current?.connected);
+    
+    if (!socketRef.current?.connected) {
+      console.error('Socket not connected');
+      return;
+    }
+
+    const songData = {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      videoId: song.videoId,
+      cover: song.cover
+    };
+
+    console.log('Emitting addToQueue event with data:', {
+      sessionId,
+      song: songData
+    });
+
+    socketRef.current.emit('addToQueue', {
+      sessionId,
+      song: songData
+    });
+  };
+
+  const playNext = () => {
+    if (!socketRef.current?.connected) {
+      console.error('Socket not connected');
+      return;
+    }
+
+    console.log('Playing next song');
+    socketRef.current.emit('playNext', { sessionId });
+  };
+
+  const removeFromQueue = (index) => {
+    console.log('Removing song at index:', index);
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('removeFromQueue', { sessionId, index });
+    }
+  };
+
+  const reorderQueue = (startIndex, endIndex) => {
+    console.log('Reordering queue:', { startIndex, endIndex });
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('reorderQueue', { sessionId, startIndex, endIndex });
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      const oldIndex = songQueue.findIndex((song) => song.id === active.id);
+      const newIndex = songQueue.findIndex((song) => song.id === over.id);
+      
+      console.log('Reordering queue:', { oldIndex, newIndex });
+      reorderQueue(oldIndex, newIndex);
+    }
+  };
 
   return (
-    <Paper 
-      elevation={3}
-      ref={playerRef}
-      sx={{
-        height: isFullscreen ? '100vh' : '400px',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: 'background.paper',
-        mb: 2,
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-    >
-      {/* Main Content Area */}
-      <Box sx={{ 
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        p: 3
-      }}>
-        {/* Song Title */}
-        <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
-          {song ? `${song.title} - ${song.artist}` : 'Área do Player de Karaokê'}
-        </Typography>
-
-        {/* Lyrics Display */}
-        {song && (
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography variant="h4" color="primary" sx={{ mb: 2, fontWeight: 'bold' }}>
-              {currentLyric || '♪ ♫ ♪ ♫'}
-            </Typography>
-            <Typography variant="h6" color="text.secondary">
-              {nextLyric}
-            </Typography>
-          </Box>
-        )}
-
-        {/* Player Controls */}
-        {isHost && song && (
-          <Box sx={{ width: '100%', maxWidth: 600 }}>
-            {/* Progress Bar */}
-            <Slider
-              value={currentTime}
-              max={duration}
-              onChange={handleSeek}
-              sx={{ mb: 2 }}
+    <div className="h-screen flex">
+      {/* Left Side - Song List */}
+      <div className="w-[384px] flex-shrink-0 bg-white shadow-lg flex flex-col">
+        {/* Search Bar */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search songs..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
             />
+            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+          </div>
+        </div>
 
-            {/* Time Display */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="caption">
-                {new Date(currentTime).toISOString().substr(14, 5)}
-              </Typography>
-              <Typography variant="caption">
-                {new Date(duration).toISOString().substr(14, 5)}
-              </Typography>
-            </Box>
+        {/* Song List */}
+        <div className="flex-1 overflow-y-auto">
+          {songs.map((song) => (
+            <div 
+              key={song.id} 
+              className="flex items-center p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+              onClick={() => addToQueue(song)}
+            >
+              <img src={song.cover} alt={song.title} className="w-12 h-12 rounded object-cover" />
+              <div className="ml-4 flex-1 min-w-0">
+                <div className="font-medium text-gray-900 truncate">{song.title}</div>
+                <div className="text-sm text-gray-600 truncate">{song.artist}</div>
+              </div>
+              <MoreVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
+            </div>
+          ))}
+        </div>
 
-            {/* Controls */}
-            <Stack direction="row" spacing={2} alignItems="center">
-              <IconButton onClick={handlePlayPause} size="large">
-                {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-              </IconButton>
+        {/* Navigation */}
+        <div className="border-t border-gray-200 p-2 grid grid-cols-5 gap-1">
+          <div className="flex flex-col items-center py-2">
+            <span className="text-xl mb-1">🎵</span>
+            <span className="text-xs">Discover</span>
+          </div>
+          <div className="flex flex-col items-center py-2">
+            <Search className="w-5 h-5 mb-1" />
+            <span className="text-xs">Search</span>
+          </div>
+          <div className="flex flex-col items-center py-2">
+            <Star className="w-5 h-5 mb-1" />
+            <span className="text-xs">My Songs</span>
+          </div>
+          <div className="flex flex-col items-center py-2">
+            <Smartphone className="w-5 h-5 mb-1" />
+            <span className="text-xs">Remote</span>
+          </div>
+          <div className="flex flex-col items-center py-2">
+            <Settings className="w-5 h-5 mb-1" />
+            <span className="text-xs">Settings</span>
+          </div>
+        </div>
+      </div>
 
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}>
-                <IconButton onClick={handleMuteToggle}>
-                  {isMuted ? <VolumeOffIcon /> : <VolumeUpIcon />}
-                </IconButton>
-                <Slider
-                  value={volume}
-                  onChange={handleVolumeChange}
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  sx={{ width: 100 }}
+      {/* Right Side - Player and Queue */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Player Area */}
+        <div className="flex-1 bg-gradient-to-br from-purple-800 to-purple-900 flex flex-col items-center justify-center relative">
+          {/* YouTube Player */}
+          <div className="absolute inset-0">
+            <div className="w-full h-full">
+              {currentVideoId && (
+                <YouTubePlayer
+                  videoId={currentVideoId}
+                  isPlaying={isPlaying}
+                  volume={volume}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnd={playNext}
                 />
-              </Stack>
-            </Stack>
-          </Box>
-        )}
-      </Box>
+              )}
+            </div>
+          </div>
+        </div>
 
-      {/* QR Code Area - Only show for host */}
-      {isHost && (
-        <Box
-          sx={{
-            position: 'absolute',
-            left: theme.spacing(2),
-            bottom: theme.spacing(2),
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            padding: theme.spacing(1),
-            borderRadius: theme.shape.borderRadius,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            boxShadow: theme.shadows[4],
-          }}
-        >
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              mb: 1,
-              color: 'black',
-              textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff',
-              fontWeight: 'bold'
-            }}
-          >
-            ID: {sessionId}
-          </Typography>
-          <QRCodeCanvas value={sessionUrl} size={100} />
-        </Box>
-      )}
+        {/* Queue Section */}
+        <div className="bg-gray-50 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <span className="bg-pink-600 text-white rounded-full w-6 h-6 flex items-center justify-center mr-2">
+                {songQueue.length}
+              </span>
+              <span className="font-medium">Song Queue</span>
+              {isHost && (
+                <span className="text-gray-600 text-sm ml-4">Session ID: {sessionId}</span>
+              )}
+            </div>
+          </div>
 
-      {/* Fullscreen Button */}
-      <IconButton
-        onClick={handleFullscreenToggle}
-        sx={{
-          position: 'absolute',
-          right: theme.spacing(2),
-          bottom: theme.spacing(2),
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-          },
-        }}
-      >
-        {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-      </IconButton>
-    </Paper>
+          <div className="w-full overflow-x-auto">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={songQueue.map(song => song.id)}
+                strategy={horizontalListSortingStrategy}
+              >
+                <div className="inline-flex gap-4 pb-4 pr-4">
+                  {songQueue.map((song, index) => (
+                    <SortableItem
+                      key={song.id}
+                      song={song}
+                      index={index}
+                      isHost={isHost}
+                      playNext={playNext}
+                      removeFromQueue={() => removeFromQueue(index)}
+                    />
+                  ))}
+                  <div className="flex-shrink-0 w-64 h-24 border border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-white">
+                    <span className="text-gray-400">Add to queue</span>
+                  </div>
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

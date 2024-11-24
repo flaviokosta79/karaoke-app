@@ -1,0 +1,248 @@
+/* Reset CSS */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Typography */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+:root {
+  --primary-color: #d5167a;
+  --secondary-color: #17ae74;
+  --text-color: #2c2c2e;
+  --text-light: #636366;
+  --background-dark: #1a1a1a;
+  --background-light: #f4f4f6;
+  --border-color: rgba(200, 200, 208, 0.2);
+  --shadow-color: rgba(44, 44, 46, 0.2);
+  --transition-duration: 0.15s;
+}
+
+/* Base Styles */
+html {
+  font-size: 62.5%;
+  font-family: 'Montserrat', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-size: 1.6rem;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* Player Layout */
+.player-container {
+  display: flex;
+  height: 100vh;
+  background: var(--background-dark);
+  color: white;
+}
+
+.player-main {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: margin-right var(--transition-duration) ease-in-out;
+}
+
+/* Player Controls */
+.player-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  transition: transform 0.3s ease-in-out;
+}
+
+.player-controls__progress {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 1.6rem;
+}
+
+.player-controls__buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1.6rem;
+}
+
+/* Lyrics Display */
+.lyrics-container {
+  position: absolute;
+  bottom: 12rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 2rem;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+}
+
+.lyrics-current {
+  font-size: 3.2rem;
+  font-weight: bold;
+  color: var(--primary-color);
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  margin-bottom: 1rem;
+}
+
+.lyrics-next {
+  font-size: 2.4rem;
+  color: rgba(255,255,255,0.7);
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+/* Playlist Panel */
+.playlist-panel {
+  width: 35rem;
+  background: var(--background-dark);
+  border-left: 1px solid rgba(255,255,255,0.1);
+  overflow-y: auto;
+}
+
+.playlist-header {
+  padding: 2rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.playlist-title {
+  font-size: 2rem;
+  font-weight: bold;
+  color: white;
+}
+
+/* Song Items */
+.song-item {
+  display: grid;
+  grid-template-columns: 4.8rem 1fr auto;
+  gap: 1.6rem;
+  padding: 1.6rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  transition: background-color var(--transition-duration) ease;
+}
+
+.song-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.song-thumb {
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 0.8rem;
+  overflow: hidden;
+}
+
+.song-info {
+  overflow: hidden;
+}
+
+.song-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-artist {
+  font-size: 1.2rem;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Audio Controls */
+.audio-controls {
+  position: fixed;
+  bottom: 8rem;
+  right: 2rem;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 1.6rem;
+  padding: 2rem;
+  width: 30rem;
+  color: white;
+}
+
+.audio-control {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  margin-bottom: 1.6rem;
+}
+
+.audio-control:last-child {
+  margin-bottom: 0;
+}
+
+/* Custom Slider Styles */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 0.4rem;
+  border-radius: 0.2rem;
+  background: rgba(255,255,255,0.2);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  transition: transform var(--transition-duration) ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Buttons */
+.btn-icon {
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  cursor: pointer;
+  transition: background-color var(--transition-duration) ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  background: var(--primary-color);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-in-out;
+}

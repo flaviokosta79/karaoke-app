@@ -8,11 +8,14 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2",
     "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "nanoid": "^3.3.6",
     "qrcode": "^1.5.3",
-    "nanoid": "^3.3.6"
+    "socket.io": "^4.7.2",
+    "youtube-dl-exec": "^3.0.10",
+    "youtube-playlist-summary": "^2.1.6",
+    "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"
