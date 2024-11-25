@@ -11,22 +11,18 @@ const colors = [
   { bg: 'bg-orange-500', text: 'text-orange-500', name: 'Laranja' },
 ];
 
-function ColorAvatar({ selected, color, onClick, initials }) {
-  const isSelected = selected?.bg === color.bg;
-  
+function ColorAvatar({ color, initials }) {
   return (
-    <button
-      onClick={() => onClick(color)}
+    <div
       className={`
         w-12 h-12 rounded-full flex items-center justify-center
         ${color.bg} text-white font-semibold text-lg
-        transition-transform hover:scale-110
-        ${isSelected ? 'ring-4 ring-offset-2 ring-' + color.bg.replace('bg-', '') : ''}
+        transition-transform hover:scale-110 cursor-pointer
       `}
       title={color.name}
     >
       {initials}
-    </button>
+    </div>
   );
 }
 

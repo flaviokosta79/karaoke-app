@@ -9,9 +9,16 @@ const youtubeService = require('./services/youtubeService');
 const app = express();
 const server = http.createServer(app);
 
+// Lista de origens permitidas
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://192.168.101.5:3000"  // Seu IP local
+];
+
 // Configuração do CORS
 app.use(cors({
-  origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+  origin: allowedOrigins,
   methods: ["GET", "POST"],
   credentials: true
 }));
@@ -19,7 +26,7 @@ app.use(cors({
 // Configuração do Socket.IO
 const io = socketIo(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -125,6 +132,48 @@ app.get('/api/playlist', async (req, res) => {
     res.json(videos);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Rota para verificar se uma sessão existe
+app.get('/api/sessions/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions.get(sessionId);
+  
+  if (!session) {
+    return res.status(404).json({ error: 'Sessão não encontrada' });
+  }
+  
+  res.json({ 
+    sessionId: session.id,
+    participantsCount: session.participants.length
+  });
+});
+
+// Rota para listar todas as sessões ativas
+app.get('/api/sessions', (req, res) => {
+  try {
+    const activeSessions = [];
+    const now = Date.now();
+
+    for (const [sessionId, session] of sessions.entries()) {
+      // Só retorna sessões que foram ativas nos últimos 30 minutos
+      if (now - session.lastActivity < 30 * 60 * 1000) {
+        activeSessions.push({
+          sessionId,
+          participants: session.participants.length,
+          currentSong: session.currentSong,
+          queueSize: session.queue.length,
+          lastActivity: session.lastActivity
+        });
+      }
+    }
+
+    console.log('Sessões ativas encontradas:', activeSessions.length);
+    res.json(activeSessions);
+  } catch (error) {
+    console.error('Erro ao listar sessões:', error);
+    res.status(500).json({ error: 'Erro ao listar sessões' });
   }
 });
 
@@ -374,10 +423,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${PORT}`);
-  console.log('Configurações CORS:', {
-    origins: ["http://localhost:3000", "http://127.0.0.1:3000"],
-    methods: ["GET", "POST"]
-  });
+  console.log('Origens permitidas:', allowedOrigins);
 });
