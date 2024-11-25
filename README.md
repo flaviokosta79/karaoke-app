@@ -5,18 +5,25 @@ Uma plataforma de karaokê colaborativa em tempo real com suporte multi-disposit
 ## 🚀 Funcionalidades
 
 - Sessões de karaokê em tempo real
-- Gerenciamento de fila de músicas
+- Gerenciamento de fila de músicas com drag-and-drop
 - Suporte multi-dispositivo
 - Interação social entre usuários
 - Interface moderna e responsiva
+- Busca integrada com YouTube
+- Sistema de QR Code para conexão rápida
 
 ## 🛠️ Tecnologias Utilizadas
 
 ### Frontend
-- React
+- React 18
+- Material-UI (MUI) v5
 - Socket.IO Client
-- Material-UI (MUI)
+- DND Kit para drag-and-drop
+- TailwindCSS com @tailwindcss/forms
 - React Router DOM
+- React Toastify
+- Lucide React para ícones
+- Google APIs para integração com YouTube
 
 ### Backend
 - Express.js
@@ -24,13 +31,21 @@ Uma plataforma de karaokê colaborativa em tempo real com suporte multi-disposit
 - CORS
 - QRCode
 - NanoID
+- Google APIs
 
 ## 🏗️ Estrutura do Projeto
 
 ```
 karaoke-app/
 ├── frontend/         # Aplicação React
-├── backend/          # Servidor Express
+│   ├── src/
+│   │   ├── components/     # Componentes React
+│   │   ├── pages/         # Páginas da aplicação
+│   │   ├── services/      # Serviços e APIs
+│   │   └── styles/        # Estilos e configurações CSS
+│   └── config-overrides.js # Configurações do webpack
+└── backend/          # Servidor Express
+    └── services/     # Serviços do backend
 ```
 
 ## 🔧 Configuração do Ambiente de Desenvolvimento
@@ -44,7 +59,7 @@ cd karaoke-app
 2. Instale as dependências do frontend:
 ```bash
 cd frontend
-npm install
+yarn install
 ```
 
 3. Instale as dependências do backend:
@@ -53,33 +68,59 @@ cd ../backend
 npm install
 ```
 
-4. Inicie o servidor de desenvolvimento:
+4. Configure as variáveis de ambiente:
+- Frontend: Crie um arquivo `.env` na pasta frontend com:
+  ```
+  REACT_APP_BACKEND_URL=http://localhost:5000
+  ```
+- Backend: Crie um arquivo `.env` na pasta backend com suas credenciais do Google API
 
-Backend (porta 5000):
+5. Inicie o servidor de desenvolvimento:
+
+Backend:
 ```bash
-cd backend
-npm start
+npm run dev
 ```
 
-Frontend (porta 3000):
+Frontend:
 ```bash
-cd frontend
-npm start
+yarn start
 ```
 
-## 🎯 Próximos Passos
+## 🔒 Segurança
 
-- [ ] Implementar autenticação de usuários
-- [ ] Desenvolver sistema de hospedagem de áudio/vídeo na nuvem
-- [ ] Criar versões para aplicativos móveis nativos
-- [ ] Expandir tratamento de erros
-- [ ] Adicionar armazenamento persistente
-- [ ] Desenvolver sistema avançado de pontuação de karaokê
+O projeto utiliza as versões mais recentes e seguras das dependências, com auditorias regulares de segurança. Algumas medidas implementadas:
 
-## 🤝 Contribuição
+- Uso de CORS configurado adequadamente
+- Sanitização de inputs
+- Validação de dados no servidor
+- Dependências atualizadas e sem vulnerabilidades conhecidas
 
-Contribuições são bem-vindas! Sinta-se à vontade para abrir uma issue ou enviar um pull request.
+## 🚀 Otimizações
 
-## 📝 Licença
+O projeto inclui várias otimizações para melhor performance:
 
-Este projeto está sob a licença [MIT](LICENSE).
+- Code splitting
+- Compressão Gzip
+- Remoção de código morto em produção
+- Otimização de imagens
+- Cache eficiente
+
+## 📝 Scripts Disponíveis
+
+Frontend:
+- `yarn start`: Inicia o servidor de desenvolvimento
+- `yarn build`: Cria a build de produção
+- `yarn analyze`: Analisa o tamanho do bundle
+
+Backend:
+- `npm run dev`: Inicia o servidor em modo desenvolvimento
+- `npm start`: Inicia o servidor em modo produção
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Por favor, leia as diretrizes de contribuição antes de submeter pull requests.
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
