@@ -14,10 +14,9 @@
     "qrcode": "^1.5.3",
     "socket.io": "^4.7.2",
     "youtube-dl-exec": "^3.0.10",
-    "youtube-playlist-summary": "^2.1.6",
     "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22"
+    "nodemon": "^3.1.7"
   }
 }
