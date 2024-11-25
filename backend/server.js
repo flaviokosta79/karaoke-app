@@ -30,6 +30,24 @@ app.use(express.json());
 // Armazenamento em memória das sessões
 const sessions = new Map();
 
+// Constantes para timeout
+const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2 horas em milissegundos
+const CLEANUP_INTERVAL = 30 * 60 * 1000;    // Verifica sessões a cada 30 minutos
+
+// Função para limpar sessões antigas
+function cleanupSessions() {
+  const now = Date.now();
+  for (const [sessionId, session] of sessions.entries()) {
+    if (now - session.lastActivity > SESSION_TIMEOUT && session.participants.length === 0) {
+      console.log(`Removendo sessão inativa ${sessionId}`);
+      sessions.delete(sessionId);
+    }
+  }
+}
+
+// Agenda a limpeza periódica de sessões
+setInterval(cleanupSessions, CLEANUP_INTERVAL);
+
 // Rota de teste para verificar se o servidor está rodando
 app.get('/api/health', (req, res) => {
   console.log('Health check endpoint called');
@@ -59,7 +77,8 @@ app.post('/api/sessions', async (req, res) => {
       users: new Map(),
       participants: [],
       currentSong: null,
-      isPlaying: false
+      isPlaying: false,
+      lastActivity: Date.now() // Adiciona timestamp de criação
     };
     
     sessions.set(sessionId, session);
@@ -126,25 +145,40 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Verificar se já existe um host na sessão
+    const existingHost = session.participants.find(p => p.isHost);
+    if (isHost && existingHost) {
+      socket.emit('error', { message: 'Já existe um host nesta sessão' });
+      return;
+    }
+
+    // Se não houver host e houver outros participantes, não permite entrar como host
+    if (isHost && session.participants.length > 0) {
+      socket.emit('error', { message: 'Não é possível entrar como host em uma sessão com participantes' });
+      return;
+    }
+
     // Salvar dados do usuário
     userData = { userId, userName, isHost, userColor };
     userSession = session;
     
-    // Adicionar usuário à lista de participantes da sessão
-    if (!session.participants.find(p => p.userId === userId)) {
-      session.participants.push(userData);
-    }
-
-    // Entrar na sala Socket.IO da sessão
+    // Adicionar à sessão
     socket.join(sessionId);
+    session.participants.push(userData);
     
-    // Enviar lista atualizada de participantes para todos na sessão
-    io.to(sessionId).emit('participantsUpdate', session.participants);
-
+    // Notificar todos os participantes
+    io.to(sessionId).emit('participantJoined', userData);
+    io.to(sessionId).emit('participantList', session.participants);
+    
+    // Enviar estado atual para o novo participante
+    socket.emit('queueUpdate', session.queue);
+    
     // Se houver uma música tocando, enviar para o novo participante
     if (session.currentSong) {
       socket.emit('songUpdate', session.currentSong);
     }
+    
+    session.lastActivity = Date.now();
     
     console.log(`Usuário ${userName} entrou na sessão ${sessionId}`);
     console.log('Participantes atuais:', session.participants);
@@ -152,16 +186,35 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (userSession && userData) {
-      // Remover usuário da lista de participantes
-      userSession.participants = userSession.participants.filter(
-        p => p.userId !== userData.userId
-      );
+      const sessionId = userSession.id;
       
-      // Enviar lista atualizada de participantes
-      io.to(userSession.id).emit('participantsUpdate', userSession.participants);
-      
-      console.log(`Usuário ${userData.userName} saiu da sessão ${userSession.id}`);
-      console.log('Participantes atuais:', userSession.participants);
+      // Remover participante da sessão
+      const participantIndex = userSession.participants.findIndex(p => p.userId === userData.userId);
+      if (participantIndex !== -1) {
+        userSession.participants.splice(participantIndex, 1);
+        
+        // Se o host saiu e ainda há participantes, passar o controle para o primeiro participante
+        if (userData.isHost && userSession.participants.length > 0) {
+          const newHost = userSession.participants[0];
+          newHost.isHost = true;
+          io.to(sessionId).emit('participantList', userSession.participants);
+          io.to(sessionId).emit('hostChanged', newHost);
+        }
+        
+        // Se não há mais participantes, limpar a sessão após o timeout
+        if (userSession.participants.length === 0) {
+          setTimeout(() => {
+            const session = sessions.get(sessionId);
+            if (session && session.participants.length === 0) {
+              console.log(`Removendo sessão vazia ${sessionId}`);
+              sessions.delete(sessionId);
+            }
+          }, SESSION_TIMEOUT);
+        }
+        
+        io.to(sessionId).emit('participantLeft', userData);
+        io.to(sessionId).emit('participantList', userSession.participants);
+      }
     }
   });
 
@@ -192,6 +245,8 @@ io.on('connection', (socket) => {
       
       io.to(sessionId).emit('queueUpdate', session.queue);
       console.log('Estado atual da fila:', session.queue.map(s => ({ title: s.title, queueId: s.queueId })));
+      
+      session.lastActivity = Date.now(); // Atualiza timestamp
     }
   });
 
@@ -245,32 +300,34 @@ io.on('connection', (socket) => {
     console.log(`Reordenando fila da sessão ${sessionId}: ${queueId} -> ${newIndex}`);
     const session = sessions.get(sessionId);
     if (session) {
-      console.log('Estado da fila antes da reordenação:', 
-        session.queue.map(s => ({ title: s.title, queueId: s.queueId }))
-      );
+      console.log('Estado da fila antes da reordenação:', session.queue.map(song => song.title));
 
-      // Encontra o item a ser movido
-      const songToMoveIndex = session.queue.findIndex(song => song.queueId === queueId);
-      if (songToMoveIndex !== -1) {
-        const songToMove = session.queue[songToMoveIndex];
-        console.log('Música a ser movida:', songToMove);
+      // Não permite mover músicas para a posição 0 (música tocando)
+      if (newIndex === 0) {
+        console.log('Tentativa de mover música para posição 0 bloqueada');
+        return;
+      }
 
-        // Remove o item da posição original
-        session.queue.splice(songToMoveIndex, 1);
+      // Encontra o índice atual da música que está sendo movida
+      const currentIndex = session.queue.findIndex(song => song.queueId === queueId);
+      
+      // Não permite mover a música que está tocando
+      if (currentIndex === 0) {
+        console.log('Tentativa de mover música atual bloqueada');
+        return;
+      }
 
-        // Insere o item na nova posição
-        session.queue.splice(newIndex, 0, songToMove);
+      if (currentIndex !== -1) {
+        // Remove a música da posição atual
+        const [song] = session.queue.splice(currentIndex, 1);
+        // Insere na nova posição
+        session.queue.splice(newIndex, 0, song);
         
-        // Atualiza o estado playing baseado no índice
-        session.queue.forEach((song, index) => {
-          song.playing = index === 0;
-        });
-        
-        console.log('Estado da fila após reordenação:', 
-          session.queue.map(s => ({ title: s.title, queueId: s.queueId }))
-        );
+        console.log('Estado da fila após reordenação:', session.queue.map(song => song.title));
         
         io.to(sessionId).emit('queueUpdate', session.queue);
+        
+        session.lastActivity = Date.now(); // Atualiza timestamp
       }
     }
   });
@@ -278,32 +335,40 @@ io.on('connection', (socket) => {
   socket.on('playNext', ({ sessionId, index }) => {
     const session = sessions.get(sessionId);
     if (session && session.queue.length > 0) {
-      // Encontra e remove a música que está tocando atualmente
+      // Desativa a música que estava tocando anteriormente
       const currentPlayingIndex = session.queue.findIndex(song => song.playing);
       if (currentPlayingIndex !== -1) {
-        session.queue.splice(currentPlayingIndex, 1);
+        session.queue[currentPlayingIndex].playing = false;
       }
 
-      // Ajusta o índice após a remoção da música atual
+      let nextSongIndex;
       if (index !== undefined) {
-        const adjustedIndex = index > currentPlayingIndex ? index - 1 : index;
-        if (adjustedIndex >= 0 && adjustedIndex < session.queue.length) {
-          session.queue[adjustedIndex].playing = true;
-          io.to(sessionId).emit('songChange', session.queue[adjustedIndex]);
-        } else if (session.queue.length > 0) {
-          session.queue[0].playing = true;
-          io.to(sessionId).emit('songChange', session.queue[0]);
+        nextSongIndex = index;
+      } else {
+        // Se não houver índice específico, pega a próxima música após a atual
+        nextSongIndex = currentPlayingIndex !== -1 ? currentPlayingIndex + 1 : 0;
+        // Se chegou ao fim da fila, volta para o início
+        if (nextSongIndex >= session.queue.length) {
+          nextSongIndex = 0;
         }
-      } else if (session.queue.length > 0) {
-        // Se não houver índice específico, toca a primeira música da fila
-        session.queue[0].playing = true;
-        io.to(sessionId).emit('songChange', session.queue[0]);
+      }
+
+      if (nextSongIndex >= 0 && nextSongIndex < session.queue.length) {
+        // Remove a música da sua posição atual e a marca como tocando
+        const nextSong = session.queue.splice(nextSongIndex, 1)[0];
+        nextSong.playing = true;
+        
+        // Insere a música no início da fila
+        session.queue.unshift(nextSong);
+        
+        io.to(sessionId).emit('songChange', nextSong);
+        io.to(sessionId).emit('queueUpdate', session.queue);
+        
+        session.lastActivity = Date.now(); // Atualiza timestamp
       } else {
         // Se não houver mais músicas, para a reprodução
         io.to(sessionId).emit('playingStateUpdate', false);
       }
-
-      io.to(sessionId).emit('queueUpdate', session.queue);
     }
   });
 });
