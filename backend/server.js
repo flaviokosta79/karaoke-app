@@ -284,10 +284,16 @@ io.on('connection', (socket) => {
         session.queue.splice(currentPlayingIndex, 1);
       }
 
-      // Se um índice específico foi fornecido, toca essa música
+      // Ajusta o índice após a remoção da música atual
       if (index !== undefined) {
-        session.queue[index].playing = true;
-        io.to(sessionId).emit('songChange', session.queue[index]);
+        const adjustedIndex = index > currentPlayingIndex ? index - 1 : index;
+        if (adjustedIndex >= 0 && adjustedIndex < session.queue.length) {
+          session.queue[adjustedIndex].playing = true;
+          io.to(sessionId).emit('songChange', session.queue[adjustedIndex]);
+        } else if (session.queue.length > 0) {
+          session.queue[0].playing = true;
+          io.to(sessionId).emit('songChange', session.queue[0]);
+        }
       } else if (session.queue.length > 0) {
         // Se não houver índice específico, toca a primeira música da fila
         session.queue[0].playing = true;
