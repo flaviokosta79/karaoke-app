@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { config } from '../config';
-import { Loader2 } from 'lucide-react';
-
+import { CircularProgress } from '@mui/material';
 function Home() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);

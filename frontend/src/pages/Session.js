@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import KaraokePlayer from '../components/session/KaraokePlayer';
+import HostView from '../components/session/host/HostView';
+import GuestView from '../components/session/guest/GuestView';
 import { config } from '../config';
 import { toast } from 'react-toastify';
 
@@ -136,52 +137,18 @@ function Session() {
   return (
     <div className="min-h-screen bg-gray-100">
       {isHost ? (
-        <KaraokePlayer
+        <HostView
           socket={socket}
           sessionId={sessionId}
-          isHost={isHost}
           currentSong={currentSong}
         />
       ) : (
-        <div className="container mx-auto px-4 py-8">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-4">Sessão de Karaokê</h2>
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-2">Participantes Online:</h3>
-              <div className="space-y-2">
-                {participants.map((participant) => (
-                  <div 
-                    key={participant.userId}
-                    className="flex items-center space-x-2 p-2 bg-gray-50 rounded"
-                  >
-                    <span 
-                      className={`w-3 h-3 rounded-full ${participant.userColor}`}
-                    />
-                    <span>{participant.userName}</span>
-                    {participant.isHost && (
-                      <span className="text-sm text-gray-500">(Host)</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {currentSong && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-2">Música Atual:</h3>
-                <div className="p-3 bg-gray-50 rounded">
-                  <p className="font-medium">{currentSong.title}</p>
-                  <p className="text-sm text-gray-600">{currentSong.artist}</p>
-                </div>
-              </div>
-            )}
-            <div className="bg-blue-50 p-4 rounded">
-              <p className="text-blue-700">
-                Aguarde o host iniciar as músicas. Você pode ver a lista de participantes
-                e acompanhar a sessão em tempo real.
-              </p>
-            </div>
-          </div>
-        </div>
+        <GuestView
+          socket={socket}
+          sessionId={sessionId}
+          currentSong={currentSong}
+          participants={participants}
+        />
       )}
     </div>
   );

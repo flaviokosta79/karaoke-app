@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { CircularProgress } from '@mui/material';
 import { config } from '../config';
 
 const avatarColors = [
@@ -81,7 +81,7 @@ function UserSetup() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="flex items-center space-x-2">
-          <Loader2 className="animate-spin h-5 w-5" />
+          <CircularProgress className="animate-spin h-5 w-5" />
           <span>Loading...</span>
         </div>
       </div>
@@ -148,7 +148,7 @@ function UserSetup() {
           >
             {isLoading ? (
               <>
-                <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
+                <CircularProgress className="animate-spin -ml-1 mr-3 h-5 w-5" />
                 Joining...
               </>
             ) : (

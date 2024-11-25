@@ -1,5 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, MoreVertical, Play, SkipForward, Search, Star, Smartphone, Settings, X, GripVertical, Pause, Volume2 } from 'lucide-react';
+import { 
+  ChevronLeft as ChevronLeftIcon,
+  MoreVert as MoreVertIcon,
+  PlayArrow as PlayIcon,
+  SkipNext as SkipNextIcon,
+  Search as SearchIcon,
+  Star as StarIcon,
+  PhoneAndroid as SmartphoneIcon,
+  Settings as SettingsIcon,
+  Close as CloseIcon,
+  DragIndicator as GripVerticalIcon,
+  Pause as PauseIcon,
+  VolumeUp as VolumeIcon
+} from '@mui/icons-material';
 import {
   DndContext,
   closestCenter,
@@ -55,7 +68,7 @@ function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
             {...listeners}
             className="mr-2 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
           >
-            <GripVertical className="w-5 h-5" />
+            <GripVerticalIcon className="w-5 h-5" />
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -80,14 +93,14 @@ function SortableItem({ song, index, isHost, playNext, removeFromQueue }) {
               onClick={() => playNext()}
               className="text-gray-400 hover:text-pink-600"
             >
-              <Play className="w-5 h-5" />
+              <PlayIcon className="w-5 h-5" />
             </button>
           )}
           <button
             onClick={() => removeFromQueue(index)}
             className="text-gray-400 hover:text-red-600"
           >
-            <X className="w-5 h-5" />
+            <CloseIcon className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -231,7 +244,7 @@ function KaraokePlayer({ socket, sessionId }) {
               placeholder="Search songs..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
             />
-            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            <SearchIcon className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
           </div>
         </div>
 
@@ -248,7 +261,7 @@ function KaraokePlayer({ socket, sessionId }) {
                 <div className="font-medium text-gray-900 truncate">{song.title}</div>
                 <div className="text-sm text-gray-600 truncate">{song.artist}</div>
               </div>
-              <MoreVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <MoreVertIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
             </div>
           ))}
         </div>
@@ -260,19 +273,19 @@ function KaraokePlayer({ socket, sessionId }) {
             <span className="text-xs">Discover</span>
           </div>
           <div className="flex flex-col items-center py-2">
-            <Search className="w-5 h-5 mb-1" />
+            <SearchIcon className="w-5 h-5 mb-1" />
             <span className="text-xs">Search</span>
           </div>
           <div className="flex flex-col items-center py-2">
-            <Star className="w-5 h-5 mb-1" />
+            <StarIcon className="w-5 h-5 mb-1" />
             <span className="text-xs">My Songs</span>
           </div>
           <div className="flex flex-col items-center py-2">
-            <Smartphone className="w-5 h-5 mb-1" />
+            <SmartphoneIcon className="w-5 h-5 mb-1" />
             <span className="text-xs">Remote</span>
           </div>
           <div className="flex flex-col items-center py-2">
-            <Settings className="w-5 h-5 mb-1" />
+            <SettingsIcon className="w-5 h-5 mb-1" />
             <span className="text-xs">Settings</span>
           </div>
         </div>

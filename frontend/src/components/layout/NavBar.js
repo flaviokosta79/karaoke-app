@@ -1,6 +1,6 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Music, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Home as HomeIcon, MusicNote as MusicIcon, Settings as SettingsIcon } from '@mui/icons-material';
 
 function NavBar() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ function NavBar() {
               onClick={() => navigate('/')}
               className="flex items-center space-x-2 hover:text-gray-300"
             >
-              <Home className="h-6 w-6" />
+              <HomeIcon className="h-6 w-6" />
               <span className="font-bold text-xl">Karaoke Social</span>
             </button>
           </div>
@@ -28,14 +28,14 @@ function NavBar() {
                   onClick={() => {/* Handle queue */}}
                   className="flex items-center space-x-2 hover:text-gray-300"
                 >
-                  <Music className="h-6 w-6" />
+                  <MusicIcon className="h-6 w-6" />
                   <span>Queue</span>
                 </button>
                 <button
                   onClick={() => {/* Handle settings */}}
                   className="flex items-center space-x-2 hover:text-gray-300"
                 >
-                  <Settings className="h-6 w-6" />
+                  <SettingsIcon className="h-6 w-6" />
                   <span>Settings</span>
                 </button>
               </>

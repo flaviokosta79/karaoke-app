@@ -7,11 +7,19 @@ import {
   Paper,
   Grid,
 } from '@mui/material';
-import {
-  PlayArrow,
-  Pause,
-  VolumeUp,
-  VolumeOff,
+import { 
+  ChevronLeft as ChevronLeftIcon,
+  MoreVert as MoreVertIcon,
+  PlayArrow as PlayIcon,
+  SkipNext as SkipNextIcon,
+  Search as SearchIcon,
+  Star as StarIcon,
+  PhoneAndroid as SmartphoneIcon,
+  Settings as SettingsIcon,
+  Close as CloseIcon,
+  DragIndicator as GripVerticalIcon,
+  Pause as PauseIcon,
+  VolumeUp as VolumeIcon
 } from '@mui/icons-material';
 
 function KaraokePlayer({ song, socket, sessionId, isHost }) {
